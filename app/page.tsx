@@ -30,14 +30,9 @@ export default function Home() {
       {menuOpen && <div className="mobile-menu"><a href="#servicios" onClick={closeMenu}>Servicios</a><a href="#metodo" onClick={closeMenu}>El método</a><a href="#taller" onClick={closeMenu}>El taller</a><a href={whatsapp} target="_blank" rel="noreferrer" onClick={closeMenu}>Pedí tu diagnóstico <Arrow /></a></div>}
     </header>
 
-    <section className="hero" aria-labelledby="hero-title">
+    <section className="hero" aria-label="La historia de un auto que vuelve a responder">
       <div className="hero-noise" aria-hidden="true" />
-      <div className="hero-copy">
-        <p className="eyebrow"><span />{siteData.eyebrow}</p>
-        <h1 id="hero-title"><span>{siteData.headlineLead}</span><em>{siteData.headlineAccent}</em></h1>
-        <p className="hero-subtitle">{siteData.subheadline}</p>
-      </div>
-      <div className="hero-engine"><EngineExplorer whatsappUrl={whatsapp} /></div>
+      <div className="hero-interaction"><EngineExplorer whatsappUrl={whatsapp} /></div>
       <div className="scroll-cue"><span className="mouse"><i /></span><span>Deslizá<br />para explorar</span></div>
     </section>
 
