@@ -4,6 +4,15 @@ import { useEffect, useRef, useState } from "react";
 
 type EngineState = "broken" | "starting" | "failed" | "repairing" | "fixed";
 type PartId = "head" | "piston" | "crankshaft" | "gears" | "belt" | "bolts";
+type SoundKey = "click" | "metalLight000" | "metalLight001" | "metalLight002" | "latch";
+
+const soundFiles: Record<SoundKey, string> = {
+  click: "/audio/metal-click.ogg",
+  metalLight000: "/audio/metal-light-000.ogg",
+  metalLight001: "/audio/metal-light-001.ogg",
+  metalLight002: "/audio/metal-light-002.ogg",
+  latch: "/audio/metal-latch.ogg",
+};
 
 const partInfo: Record<PartId, { name: string; description: string }> = {
   head: { name: "Tapa levantada", description: "Una holgura arriba puede ser la señal de que algo no está sellando bien." },
@@ -29,12 +38,18 @@ function Gear({ cx, cy, radius, teeth = 10 }: { cx: number; cy: number; radius: 
 export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const oscillatorRef = useRef<OscillatorNode[]>([]);
+  const masterGainRef = useRef<GainNode | null>(null);
+  const audioDataRef = useRef<Partial<Record<SoundKey, ArrayBuffer>>>({});
+  const audioPromisesRef = useRef<Partial<Record<SoundKey, Promise<ArrayBuffer | null>>>>({});
+  const audioBuffersRef = useRef<Partial<Record<SoundKey, AudioBuffer>>>({});
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  const audioGenerationRef = useRef(0);
   const completeTimerRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
   const pointerRef = useRef({ x: 0, y: 0 });
   const currentPointerRef = useRef({ x: 0, y: 0 });
   const [engineState, setEngineState] = useState<EngineState>("broken");
+  const [isCalling, setIsCalling] = useState(false);
   const [selectedPart, setSelectedPart] = useState<PartId | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -42,6 +57,13 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
   useEffect(() => {
     const storedSound = window.localStorage.getItem("el-respaldo-sound");
     if (storedSound !== null) setSoundEnabled(storedSound === "on");
+    if (storedSound !== "off") {
+      Object.entries(soundFiles).forEach(([key, source]) => {
+        const soundKey = key as SoundKey;
+        audioPromisesRef.current[soundKey] = fetch(source).then(async (response) => response.ok ? response.arrayBuffer() : null).catch(() => null);
+        void audioPromisesRef.current[soundKey]?.then((data) => { if (data) audioDataRef.current[soundKey] = data; });
+      });
+    }
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     const updateMotion = () => setReducedMotion(mediaQuery.matches);
     updateMotion();
@@ -86,47 +108,80 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const stopSounds = () => {
-    oscillatorRef.current.forEach((oscillator) => { try { oscillator.stop(); } catch { /* already stopped */ } });
-    oscillatorRef.current = [];
-  };
-
-  const playTone = (frequency: number, start: number, duration: number, type: OscillatorType, endFrequency?: number) => {
+  const ensureAudioContext = () => {
     const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
+    if (!AudioContextClass) return null;
     if (!audioContextRef.current) audioContextRef.current = new AudioContextClass();
     const context = audioContextRef.current;
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    const now = context.currentTime;
-    oscillator.type = type;
-    oscillator.frequency.setValueAtTime(frequency, now + start);
-    if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(endFrequency, now + start + duration);
-    gain.gain.setValueAtTime(0.001, now + start);
-    gain.gain.exponentialRampToValueAtTime(0.065, now + start + 0.012);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + start + duration);
-    oscillator.connect(gain).connect(context.destination);
-    oscillator.start(now + start);
-    oscillator.stop(now + start + duration + 0.02);
-    oscillatorRef.current.push(oscillator);
+    if (!masterGainRef.current) {
+      const masterGain = context.createGain();
+      masterGain.gain.value = 0.55;
+      masterGain.connect(context.destination);
+      masterGainRef.current = masterGain;
+    }
+    return context;
+  };
+
+  const stopSounds = () => {
+    audioGenerationRef.current += 1;
+    activeSourcesRef.current.forEach((source) => {
+      try { source.stop(); } catch { /* source already ended */ }
+      try { source.disconnect(); } catch { /* source already disconnected */ }
+    });
+    activeSourcesRef.current = [];
+    if (audioContextRef.current?.state === "running") void audioContextRef.current.suspend();
+  };
+
+  const getAudioBuffer = async (key: SoundKey, context: AudioContext) => {
+    if (audioBuffersRef.current[key]) return audioBuffersRef.current[key];
+    const data = audioDataRef.current[key] ?? await audioPromisesRef.current[key];
+    if (!data) return null;
+    try {
+      const buffer = await context.decodeAudioData(data.slice(0));
+      audioBuffersRef.current[key] = buffer;
+      return buffer;
+    } catch {
+      return null;
+    }
   };
 
   const playSound = (kind: "broken" | "start" | "diagnostic" | "fixed") => {
     if (!soundEnabled) return;
     stopSounds();
-    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    if (!audioContextRef.current) audioContextRef.current = new AudioContextClass();
-    void audioContextRef.current.resume();
-    if (kind === "broken") {
-      playTone(91, 0, 0.08, "square", 63); playTone(125, 0.24, 0.06, "square", 78); playTone(75, 0.5, 0.1, "sawtooth", 55);
-    } else if (kind === "start") {
-      playTone(92, 0, 0.18, "sawtooth", 66); playTone(98, 0.38, 0.18, "sawtooth", 69); playTone(88, 0.76, 0.17, "sawtooth", 61); playTone(460, 1.02, 0.06, "square", 120);
-    } else if (kind === "diagnostic") {
-      playTone(180, 0, 1.6, "sine", 920);
-    } else {
-      playTone(180, 0, 0.07, "square", 90); playTone(250, 0.18, 0.08, "square", 130); playTone(110, 0.36, 0.65, "sine", 92);
-    }
+    const context = ensureAudioContext();
+    if (!context || !masterGainRef.current) return;
+    void context.resume();
+    const generation = audioGenerationRef.current;
+    const sequence = kind === "start"
+      ? [["click", 0, .1, .42, -.1], ["metalLight000", .1, .31, .7, 0], ["metalLight001", .46, .28, .62, -.08], ["metalLight002", .82, .3, .66, .08], ["click", 1.2, .12, .48, .04]]
+      : kind === "diagnostic"
+        ? [["click", 0, .12, .36, -.3], ["latch", .34, .16, .5, .22], ["metalLight001", .68, .16, .42, .25], ["click", .98, .12, .36, -.2], ["latch", 1.24, .16, .46, -.28], ["metalLight002", 1.58, .19, .48, .28], ["click", 1.96, .14, .52, .12]]
+        : kind === "fixed"
+          ? [["click", 0, .1, .3, 0], ["metalLight000", .13, .34, .48, -.06], ["latch", .52, .18, .3, .06], ["metalLight001", .75, .42, .24, .1]]
+          : [["metalLight000", 0, .16, .35, 0]];
+    sequence.forEach(([key, start, duration, volume, pan]) => {
+      void (async () => {
+        const buffer = await getAudioBuffer(key as SoundKey, context);
+        if (!buffer || generation !== audioGenerationRef.current || !masterGainRef.current) return;
+        const source = context.createBufferSource();
+        const gain = context.createGain();
+        const panner = context.createStereoPanner();
+        const now = context.currentTime;
+        source.buffer = buffer;
+        gain.gain.setValueAtTime(.001, now + (start as number));
+        gain.gain.linearRampToValueAtTime(volume as number, now + (start as number) + .008);
+        gain.gain.linearRampToValueAtTime(.001, now + (start as number) + (duration as number));
+        panner.pan.value = pan as number;
+        source.connect(gain).connect(panner).connect(masterGainRef.current);
+        source.onended = () => {
+          activeSourcesRef.current = activeSourcesRef.current.filter((activeSource) => activeSource !== source);
+          try { source.disconnect(); gain.disconnect(); panner.disconnect(); } catch { /* cleanup is best effort */ }
+        };
+        activeSourcesRef.current.push(source);
+        source.start(now + (start as number));
+        source.stop(now + (start as number) + (duration as number) + .02);
+      })();
+    });
   };
 
   const vibrate = (pattern: number | number[]) => {
@@ -144,21 +199,26 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
   };
 
   const startRepair = () => {
-    if (engineState !== "failed") return;
+    if (engineState !== "failed" || isCalling) return;
     setSelectedPart(null);
-    setEngineState("repairing");
-    playSound("diagnostic");
+    setIsCalling(true);
     vibrate([25, 40, 25]);
     completeTimerRef.current = window.setTimeout(() => {
-      setEngineState("fixed");
-      playSound("fixed");
-      vibrate(60);
-    }, reducedMotion ? 1000 : 2400);
+      setIsCalling(false);
+      setEngineState("repairing");
+      playSound("diagnostic");
+      completeTimerRef.current = window.setTimeout(() => {
+        setEngineState("fixed");
+        playSound("fixed");
+        vibrate(60);
+      }, reducedMotion ? 1000 : 2400);
+    }, 700);
   };
 
   const resetEngine = () => {
     if (completeTimerRef.current) window.clearTimeout(completeTimerRef.current);
     stopSounds();
+    setIsCalling(false);
     setSelectedPart(null);
     setEngineState("broken");
     playSound("broken");
@@ -166,7 +226,7 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
 
   const handleAction = () => {
     if (engineState === "broken") startAttempt();
-    else if (engineState === "failed") startRepair();
+    else if (engineState === "failed" && !isCalling) startRepair();
     else if (engineState === "fixed") window.open(whatsappUrl, "_blank", "noopener,noreferrer");
   };
 
@@ -178,8 +238,8 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
     repairing: { eyebrow: "El Respaldo ya está en eso.", title: "Primero entendemos.", subcopy: "Revisamos. Diagnosticamos. Reparamos.", hint: "", label: "03 / Reparación" },
     fixed: { eyebrow: "Después de pasar por El Respaldo.", title: "Listo. Ahora responde.", subcopy: "Primero entendimos qué pasaba. Después lo arreglamos.", hint: "", label: "04 / Responde" },
   }[engineState];
-  const actionLabel = engineState === "broken" ? "Intentá arrancar" : engineState === "starting" ? "Intentando..." : engineState === "failed" ? "Llamá al respaldo" : engineState === "repairing" ? "Diagnosticando..." : "Pedí tu diagnóstico";
-  const liveMessage = engineState === "broken" ? "Motor roto. Tocá Intentá arrancar para iniciar la historia." : engineState === "starting" ? "Intento de arranque en curso." : engineState === "failed" ? "El motor no arranca. No insistas." : engineState === "repairing" ? "Reparación en curso. Las piezas están volviendo a su lugar." : "Listo. Ahora responde.";
+  const actionLabel = engineState === "broken" ? "INTENTÁ ARRANCAR" : engineState === "starting" ? "INTENTANDO…" : isCalling ? "LLAMANDO AL RESPALDO…" : engineState === "failed" ? "REPARAR" : engineState === "repairing" ? "REPARANDO…" : "PEDÍ TU DIAGNÓSTICO";
+  const liveMessage = engineState === "broken" ? "Motor roto. Tocá Intentá arrancar para iniciar la historia." : engineState === "starting" ? "Intento de arranque en curso." : isCalling ? "Llamando al respaldo. El botón está deshabilitado." : engineState === "failed" ? "El motor no arranca. Tocá Reparar para iniciar la reparación." : engineState === "repairing" ? "Reparando. Las piezas están volviendo a su lugar." : "Listo. Ahora responde. Tocá Pedí tu diagnóstico para abrir WhatsApp.";
 
   return <div className={`engine-experience state-${engineState}`} ref={stageRef} style={{ "--pointer-x": "0", "--pointer-y": "0" } as React.CSSProperties}>
     <div className="engine-glow" aria-hidden="true" />
@@ -213,7 +273,7 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
 
     <div className="engine-copy" aria-live="polite"><p className="engine-eyebrow"><span />{story.eyebrow}</p><h1 id="hero-title">{story.title}</h1><p className="engine-subcopy">{story.subcopy}</p><span className="engine-state-label">{story.label}</span>{activePart && <div className="part-popover"><small>{activePart.name}</small><p>{activePart.description}</p><button type="button" onClick={() => setSelectedPart(null)} aria-label="Cerrar detalle de pieza">×</button></div>}</div>
     <p className="engine-live" role="status">{liveMessage}</p>
-    <div className="engine-actions"><button type="button" className="primary-cta engine-action" disabled={engineState === "starting" || engineState === "repairing"} onClick={handleAction}><span className="cta-icon" aria-hidden="true">{engineState === "fixed" ? "▣" : engineState === "starting" || engineState === "repairing" ? "◌" : "⌁"}</span>{actionLabel}<span className="arrow" aria-hidden="true">↗</span></button><div className="engine-tools"><button type="button" className="sound-toggle" aria-label={soundEnabled ? "Silenciar sonido" : "Activar sonido"} aria-pressed={soundEnabled} onClick={() => { const nextValue = !soundEnabled; setSoundEnabled(nextValue); window.localStorage.setItem("el-respaldo-sound", nextValue ? "on" : "off"); if (!nextValue) stopSounds(); }}>{soundEnabled ? "Sonido on" : "Sonido off"}</button>{engineState === "fixed" && <button type="button" className="reset-button" onClick={resetEngine}>Repetir historia</button>}</div></div>
+    <div className="engine-actions"><button type="button" className="primary-cta engine-action" disabled={engineState === "starting" || isCalling || engineState === "repairing"} onClick={handleAction}><span className="cta-icon" aria-hidden="true">{engineState === "fixed" ? "▣" : engineState === "starting" || isCalling || engineState === "repairing" ? "◌" : "⌁"}</span>{actionLabel}<span className="arrow" aria-hidden="true">↗</span></button><div className="engine-tools"><button type="button" className="sound-toggle" aria-label={soundEnabled ? "Silenciar sonido" : "Activar sonido"} aria-pressed={soundEnabled} onClick={() => { const nextValue = !soundEnabled; setSoundEnabled(nextValue); window.localStorage.setItem("el-respaldo-sound", nextValue ? "on" : "off"); if (!nextValue) stopSounds(); }}>{soundEnabled ? "SONIDO ON" : "SONIDO OFF"}</button>{engineState === "fixed" && <button type="button" className="reset-button" onClick={resetEngine}>Repetir historia</button>}</div></div>
     <p className="engine-hint">{story.hint}</p>
   </div>;
 }
