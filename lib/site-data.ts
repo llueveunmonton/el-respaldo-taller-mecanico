@@ -3,7 +3,9 @@ export const siteData = {
   descriptor: "Mecánica automotriz",
   eyebrow: "Taller de confianza en tu barrio",
   headline: "Mecánica que responde.",
-  subheadline: "Diagnóstico preciso. Reparación confiable.",
+  headlineLead: "Mecánica que",
+  headlineAccent: "responde.",
+  subheadline: "¿Algo no suena bien?",
   contact: {
     // Completar con el número real cuando el negocio lo confirme.
     whatsappNumber: "",

@@ -17,8 +17,6 @@ function ServiceIcon({ icon }: { icon: ServiceIcon }) {
   return <svg viewBox="0 0 42 42" aria-hidden="true"><path d="m25 6 5 5-7 7 6 6-5 5-6-6-7 7-5-5 7-7-6-6 5-5 6 6z" /></svg>;
 }
 
-function CheckIcon() { return <span className="check-icon" aria-hidden="true">✓</span>; }
-
 export default function Home() {
   const whatsapp = siteData.contact.whatsappUrl;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -36,13 +34,10 @@ export default function Home() {
       <div className="hero-noise" aria-hidden="true" />
       <div className="hero-copy">
         <p className="eyebrow"><span />{siteData.eyebrow}</p>
-        <h1 id="hero-title"><span>{siteData.name}</span>{siteData.headline}</h1>
+        <h1 id="hero-title"><span>{siteData.headlineLead}</span><em>{siteData.headlineAccent}</em></h1>
         <p className="hero-subtitle">{siteData.subheadline}</p>
-        <a href={whatsapp} className="primary-cta" target="_blank" rel="noreferrer"><span className="cta-tool">✣</span>Pedí tu diagnóstico <Arrow /></a>
-        <div className="hero-proof"><span><CheckIcon />Trabajo claro</span><span><CheckIcon />Manos expertas</span><span><CheckIcon />Sin vueltas</span></div>
       </div>
-      <div className="hero-engine"><EngineExplorer /><p className="precision-note"><span>02</span>Precisión que<br />sigue en movimiento</p></div>
-      <div className="hero-side-note">Autos<br />Familias<br />Trabajo<br />Kilómetros<br />Historias</div>
+      <div className="hero-engine"><EngineExplorer whatsappUrl={whatsapp} /></div>
       <div className="scroll-cue"><span className="mouse"><i /></span><span>Deslizá<br />para explorar</span></div>
     </section>
 

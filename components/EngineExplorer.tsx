@@ -2,186 +2,197 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type PartId = "block" | "pistons" | "crankshaft" | "timing" | "alternator" | "bolts";
+type EngineState = "broken" | "diagnosing" | "repaired";
+type PartId = "head" | "piston" | "crankshaft" | "gears" | "belt" | "bolts";
 
-const parts: Record<PartId, { name: string; description: string }> = {
-  block: { name: "Tapa de cilindros", description: "El corazón superior del motor: sella, respira y mantiene todo en su lugar." },
-  pistons: { name: "Pistones", description: "Transforman la explosión en movimiento. Los revisamos para que trabajen parejos." },
-  crankshaft: { name: "Cigüeñal", description: "Convierte el movimiento de los pistones en la fuerza que mueve tu auto." },
-  timing: { name: "Distribución", description: "Sincroniza cada ciclo del motor con precisión. Un ajuste a tiempo evita problemas." },
-  alternator: { name: "Alternador", description: "Genera la energía que mantiene viva la batería y los sistemas eléctricos." },
-  bolts: { name: "Fijaciones", description: "Cada tornillo tiene su torque. La confiabilidad también está en lo que no se ve." },
+const partInfo: Record<PartId, { name: string; description: string }> = {
+  head: { name: "Tapa levantada", description: "Una holgura arriba puede ser la señal de que algo no está sellando bien." },
+  piston: { name: "Pistón fuera de nivel", description: "Revisamos su recorrido para que la fuerza se reparta como corresponde." },
+  crankshaft: { name: "Cigüeñal", description: "Convierte el movimiento del motor en la fuerza que mueve tu auto." },
+  gears: { name: "Engranajes", description: "La sincronización correcta hace que cada parte llegue a tiempo." },
+  belt: { name: "Correa floja", description: "Una correa con juego puede hacer ruido y perder precisión." },
+  bolts: { name: "Tornillos", description: "Cada fijación tiene un lugar y un torque. Nada queda librado al azar." },
 };
 
-function Part({
-  id,
-  selected,
-  children,
-  className = "",
-}: {
-  id: PartId;
-  selected: boolean;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  const label = parts[id].name;
-  return (
-    <g
-      className={`engine-part ${className} ${selected ? "is-selected" : ""}`}
-      role="button"
-      tabIndex={0}
-      aria-label={`Ver información sobre ${label}`}
-      data-part={id}
-    >
-      {children}
-    </g>
-  );
+function Part({ id, selected, onSelect, children }: { id: PartId; selected: boolean; onSelect: (id: PartId) => void; children: React.ReactNode }) {
+  return <g className={`engine-part engine-${id} ${selected ? "is-selected" : ""}`} data-part={id} role="button" tabIndex={0} aria-label={`Conocer ${partInfo[id].name}`} onClick={() => onSelect(id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(id); } }}>{children}</g>;
 }
 
 function Gear({ cx, cy, radius, teeth = 10 }: { cx: number; cy: number; radius: number; teeth?: number }) {
-  return (
-    <g className="gear" transform={`translate(${cx} ${cy})`}>
-      <circle r={radius} className="gear-shadow" />
-      <circle r={radius - 5} className="gear-face" />
-      <circle r={radius - 13} className="gear-inner" />
-      {Array.from({ length: teeth }).map((_, index) => {
-        const angle = (index / teeth) * 360;
-        return <rect key={angle} x={-2.5} y={-radius - 2} width={5} height={8} rx={1} transform={`rotate(${angle})`} className="gear-tooth" />;
-      })}
-      <circle r={5} className="gear-hole" />
-    </g>
-  );
+  return <g className="doodle-gear" transform={`translate(${cx} ${cy})`}>
+    <circle r={radius + 3} className="gear-outline" />
+    {Array.from({ length: teeth }).map((_, index) => <rect key={index} x="-2.5" y={-radius - 5} width="5" height="10" rx="1" transform={`rotate(${index * (360 / teeth)})`} className="gear-tooth" />)}
+    <circle r={radius - 4} className="gear-face" /><circle r={radius - 14} className="gear-inner" /><circle r="6" className="gear-hole" />
+  </g>;
 }
 
-export default function EngineExplorer() {
+export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string }) {
   const stageRef = useRef<HTMLDivElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const oscillatorRef = useRef<OscillatorNode[]>([]);
+  const completeTimerRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
-  const targetRef = useRef({ x: 0, y: 0 });
-  const currentRef = useRef({ x: 0, y: 0 });
-  const [selected, setSelected] = useState<PartId | null>(null);
+  const pointerRef = useRef({ x: 0, y: 0 });
+  const currentPointerRef = useRef({ x: 0, y: 0 });
+  const [engineState, setEngineState] = useState<EngineState>("broken");
+  const [selectedPart, setSelectedPart] = useState<PartId | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
+    const storedSound = window.localStorage.getItem("el-respaldo-sound");
+    if (storedSound !== null) setSoundEnabled(storedSound === "on");
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updateMotion = () => setReducedMotion(mediaQuery.matches);
+    updateMotion();
+    mediaQuery.addEventListener("change", updateMotion);
 
-    const render = () => {
-      const current = currentRef.current;
-      const target = targetRef.current;
-      current.x += (target.x - current.x) * 0.09;
-      current.y += (target.y - current.y) * 0.09;
+    const stage = stageRef.current;
+    if (!stage) return () => mediaQuery.removeEventListener("change", updateMotion);
+    const renderPointer = () => {
+      const current = currentPointerRef.current;
+      const target = pointerRef.current;
+      current.x += (target.x - current.x) * 0.1;
+      current.y += (target.y - current.y) * 0.1;
       stage.style.setProperty("--pointer-x", current.x.toFixed(3));
       stage.style.setProperty("--pointer-y", current.y.toFixed(3));
-      frameRef.current = requestAnimationFrame(render);
-    };
-    frameRef.current = requestAnimationFrame(render);
-
-    const onScroll = () => {
-      const bounds = stage.getBoundingClientRect();
-      const progress = Math.max(-1, Math.min(1, (window.innerHeight * 0.72 - bounds.top) / (bounds.height + window.innerHeight * 0.55)));
-      stage.style.setProperty("--scroll-progress", progress.toFixed(3));
+      frameRef.current = window.requestAnimationFrame(renderPointer);
     };
     const onPointerMove = (event: PointerEvent) => {
-      if (event.pointerType === "touch") return;
-      const rect = stage.getBoundingClientRect();
-      targetRef.current = {
-        x: Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width - 0.5) * 2)),
-        y: Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height - 0.5) * 2)),
+      if (event.pointerType === "touch" || reducedMotion) return;
+      const bounds = stage.getBoundingClientRect();
+      pointerRef.current = {
+        x: Math.max(-1, Math.min(1, ((event.clientX - bounds.left) / bounds.width - 0.5) * 2)),
+        y: Math.max(-1, Math.min(1, ((event.clientY - bounds.top) / bounds.height - 0.5) * 2)),
       };
     };
-    const onPointerLeave = () => { targetRef.current = { x: 0, y: 0 }; };
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as SVGElement;
-      const part = target.dataset.part as PartId | undefined;
-      if (part && (event.key === "Enter" || event.key === " ")) {
-        event.preventDefault();
-        setSelected(part);
-      }
-    };
-
-    window.addEventListener("scroll", onScroll, { passive: true });
+    const resetPointer = () => { pointerRef.current = { x: 0, y: 0 }; };
+    const stopWhenHidden = () => { if (document.hidden) stopSounds(); };
+    frameRef.current = window.requestAnimationFrame(renderPointer);
     stage.addEventListener("pointermove", onPointerMove, { passive: true });
-    stage.addEventListener("pointerleave", onPointerLeave, { passive: true });
-    stage.addEventListener("keydown", onKeyDown);
-    onScroll();
+    stage.addEventListener("pointerleave", resetPointer, { passive: true });
+    document.addEventListener("visibilitychange", stopWhenHidden);
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      mediaQuery.removeEventListener("change", updateMotion);
       stage.removeEventListener("pointermove", onPointerMove);
-      stage.removeEventListener("pointerleave", onPointerLeave);
-      stage.removeEventListener("keydown", onKeyDown);
-      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+      stage.removeEventListener("pointerleave", resetPointer);
+      document.removeEventListener("visibilitychange", stopWhenHidden);
+      if (frameRef.current) window.cancelAnimationFrame(frameRef.current);
+      if (completeTimerRef.current) window.clearTimeout(completeTimerRef.current);
+      stopSounds();
     };
+    // The motion preference is intentionally read once for the pointer listener.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const selectPart = (id: PartId) => setSelected((value) => value === id ? null : id);
-  const active = selected ? parts[selected] : null;
+  const stopSounds = () => {
+    oscillatorRef.current.forEach((oscillator) => { try { oscillator.stop(); } catch { /* already stopped */ } });
+    oscillatorRef.current = [];
+  };
 
-  return (
-    <div className="engine-explorer" ref={stageRef} style={{ "--pointer-x": "0", "--pointer-y": "0", "--scroll-progress": "0" } as React.CSSProperties}>
-      <div className="engine-glow" aria-hidden="true" />
-      <svg className="engine-svg" viewBox="0 0 800 700" role="img" aria-label="Motor explotado interactivo: tocá una pieza para conocerla" onClick={(event) => {
-        const target = event.target as SVGElement;
-        const part = target.closest("[data-part]")?.getAttribute("data-part") as PartId | null;
-        if (part) selectPart(part);
-      }}>
-        <defs>
-          <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#eef1ed" /><stop offset=".22" stopColor="#737a7a" /><stop offset=".48" stopColor="#22272a" /><stop offset=".73" stopColor="#c5c8c1" /><stop offset="1" stopColor="#404648" /></linearGradient>
-          <linearGradient id="metalDark" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#5f686a" /><stop offset=".5" stopColor="#171b1f" /><stop offset="1" stopColor="#808486" /></linearGradient>
-          <linearGradient id="goldMetal" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#fff08c" /><stop offset=".3" stopColor="#ffc900" /><stop offset=".65" stopColor="#8f6900" /><stop offset="1" stopColor="#ffd21c" /></linearGradient>
-          <filter id="softGlow"><feGaussianBlur stdDeviation="9" /></filter>
-          <filter id="smallShadow"><feDropShadow dx="0" dy="7" stdDeviation="6" floodColor="#000" floodOpacity=".55" /></filter>
-        </defs>
+  const playTone = (frequency: number, start: number, duration: number, type: OscillatorType, endFrequency?: number) => {
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    if (!audioContextRef.current) audioContextRef.current = new AudioContextClass();
+    const context = audioContextRef.current;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const now = context.currentTime;
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, now + start);
+    if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(endFrequency, now + start + duration);
+    gain.gain.setValueAtTime(0.001, now + start);
+    gain.gain.exponentialRampToValueAtTime(0.065, now + start + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + start + duration);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.start(now + start);
+    oscillator.stop(now + start + duration + 0.02);
+    oscillatorRef.current.push(oscillator);
+  };
 
-        <g className="engine-layer layer-back" style={{ "--layer-depth": "0.35" } as React.CSSProperties}>
-          <circle cx="400" cy="352" r="286" className="orbit" />
-          <circle cx="400" cy="352" r="236" className="orbit orbit-inner" />
-          <path d="M111 340 C185 198 640 148 707 342 C630 494 180 514 111 340Z" className="orbit-path" />
-        </g>
+  const playSound = (kind: "broken" | "diagnostic" | "repaired") => {
+    if (!soundEnabled) return;
+    stopSounds();
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    if (!audioContextRef.current) audioContextRef.current = new AudioContextClass();
+    void audioContextRef.current.resume();
+    if (kind === "broken") {
+      playTone(91, 0, 0.08, "square", 63); playTone(125, 0.24, 0.06, "square", 78); playTone(75, 0.5, 0.1, "sawtooth", 55);
+    } else if (kind === "diagnostic") {
+      playTone(180, 0, 1.6, "sine", 920);
+    } else {
+      playTone(180, 0, 0.07, "square", 90); playTone(250, 0.18, 0.08, "square", 130); playTone(110, 0.36, 0.65, "sine", 92);
+    }
+  };
 
-        <Part id="block" selected={selected === "block"} className="engine-layer layer-block">
-          <path d="M176 168 L204 125 Q211 114 227 114 H547 Q562 114 572 126 L623 184 L603 278 H205 Z" fill="url(#metal)" stroke="#11161a" strokeWidth="7" filter="url(#smallShadow)" />
-          <path d="M194 174 H603 M213 201 H593 M239 122 V255 M316 119 V250 M393 119 V250 M470 119 V250 M547 125 V250" className="metal-line" />
-          {[235, 312, 389, 466, 543].map((x) => <g key={x}><ellipse cx={x} cy="163" rx="25" ry="15" className="port" /><circle cx={x} cy="163" r="7" className="port-hole" /></g>)}
-          {[217, 287, 357, 427, 497, 575].map((x) => <circle key={x} cx={x} cy="229" r="7" className="bolt" />)}
-          <path d="M199 266 L606 266" stroke="#ffd21c" strokeOpacity=".7" strokeWidth="3" strokeDasharray="5 8" />
-        </Part>
+  const vibrate = (pattern: number | number[]) => {
+    if (reducedMotion || !navigator.vibrate) return;
+    try { navigator.vibrate(pattern); } catch { /* vibration is optional */ }
+  };
 
-        <Part id="pistons" selected={selected === "pistons"} className="engine-layer layer-pistons">
-          <g className="piston piston-highlight"><path d="M235 281 H284 L278 337 Q259 348 241 337Z" fill="url(#goldMetal)" stroke="#121619" strokeWidth="5" /><path d="M241 337 L250 432 H271 L278 337" fill="url(#goldMetal)" stroke="#121619" strokeWidth="5" /><ellipse cx="260" cy="432" rx="18" ry="10" fill="#161b1d" stroke="#c48e00" strokeWidth="4" /><path d="M236 296 H283 M237 306 H281" stroke="#4a3900" strokeWidth="3" /></g>
-          <g className="piston"><path d="M315 281 H360 L355 338 Q338 348 320 338Z" fill="url(#metal)" stroke="#121619" strokeWidth="5" /><path d="M321 338 L330 432 H350 L355 338" fill="url(#metal)" stroke="#121619" strokeWidth="5" /><ellipse cx="340" cy="432" rx="17" ry="10" fill="#161b1d" stroke="#8b9695" strokeWidth="4" /><path d="M316 296 H359 M317 306 H357" stroke="#252b2d" strokeWidth="3" /></g>
-          <g className="piston"><path d="M395 281 H440 L435 338 Q418 348 400 338Z" fill="url(#metal)" stroke="#121619" strokeWidth="5" /><path d="M401 338 L410 432 H430 L435 338" fill="url(#metal)" stroke="#121619" strokeWidth="5" /><ellipse cx="420" cy="432" rx="17" ry="10" fill="#161b1d" stroke="#8b9695" strokeWidth="4" /><path d="M396 296 H439 M397 306 H437" stroke="#252b2d" strokeWidth="3" /></g>
-          <g className="piston"><path d="M475 281 H520 L515 338 Q498 348 480 338Z" fill="url(#metal)" stroke="#121619" strokeWidth="5" /><path d="M481 338 L490 432 H510 L515 338" fill="url(#metal)" stroke="#121619" strokeWidth="5" /><ellipse cx="500" cy="432" rx="17" ry="10" fill="#161b1d" stroke="#8b9695" strokeWidth="4" /><path d="M476 296 H519 M477 306 H517" stroke="#252b2d" strokeWidth="3" /></g>
-        </Part>
+  const startDiagnosis = () => {
+    if (engineState !== "broken") return;
+    setSelectedPart(null);
+    setEngineState("diagnosing");
+    playSound("diagnostic");
+    vibrate([25, 40, 25]);
+    completeTimerRef.current = window.setTimeout(() => {
+      setEngineState("repaired");
+      playSound("repaired");
+      vibrate(60);
+    }, reducedMotion ? 900 : 2000);
+  };
 
-        <Part id="crankshaft" selected={selected === "crankshaft"} className="engine-layer layer-crankshaft">
-          <path d="M179 475 C221 446 244 484 282 468 S342 448 378 470 S438 491 478 468 S543 445 580 473" fill="none" stroke="#111518" strokeWidth="34" strokeLinecap="round" />
-          <path d="M179 475 C221 446 244 484 282 468 S342 448 378 470 S438 491 478 468 S543 445 580 473" fill="none" stroke="url(#metal)" strokeWidth="20" strokeLinecap="round" />
-          {[205, 285, 365, 445, 525].map((x, i) => <g key={x} transform={`translate(${x} ${i % 2 ? 461 : 480})`}><circle r="42" fill="url(#metalDark)" stroke="#111518" strokeWidth="6" /><circle r="27" fill="#1b2022" stroke="#a7acab" strokeWidth="4" /><circle r="8" fill="#080a0b" /></g>)}
-          <circle cx="157" cy="478" r="55" fill="url(#metalDark)" stroke="#111518" strokeWidth="7" /><circle cx="157" cy="478" r="35" fill="none" stroke="#a9adab" strokeWidth="6" strokeDasharray="8 7" /><circle cx="157" cy="478" r="10" fill="#121618" />
-        </Part>
+  const resetEngine = () => {
+    if (completeTimerRef.current) window.clearTimeout(completeTimerRef.current);
+    stopSounds();
+    setSelectedPart(null);
+    setEngineState("broken");
+    playSound("broken");
+  };
 
-        <Part id="timing" selected={selected === "timing"} className="engine-layer layer-timing">
-          <path d="M568 181 Q655 244 624 365 Q589 423 542 399 Q577 315 558 224Z" fill="none" stroke="#0c1012" strokeWidth="18" />
-          <path d="M568 181 Q655 244 624 365 Q589 423 542 399 Q577 315 558 224Z" fill="none" stroke="#606969" strokeWidth="10" strokeDasharray="3 9" />
-          <Gear cx={586} cy={194} radius={40} teeth={12} />
-          <Gear cx={620} cy={360} radius={31} teeth={10} />
-          <Gear cx={550} cy={409} radius={25} teeth={9} />
-        </Part>
+  const handleAction = () => {
+    if (engineState === "repaired") window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+    else startDiagnosis();
+  };
 
-        <Part id="alternator" selected={selected === "alternator"} className="engine-layer layer-alternator">
-          <g transform="translate(631 421) rotate(-16)"><ellipse rx="63" ry="72" fill="#0c1012" stroke="#090b0d" strokeWidth="10" /><ellipse rx="52" ry="63" fill="url(#metal)" stroke="#a5aaa7" strokeWidth="4" /><path d="M-40-41 L40 41 M-48-17 L48 17 M-34 52 L34-52 M-53 13 L53-13" stroke="#31383a" strokeWidth="9" /><circle r="25" fill="#171c1e" stroke="#bbc0ba" strokeWidth="4" /><circle r="9" fill="#080a0b" /></g>
-        </Part>
+  const activePart = selectedPart ? partInfo[selectedPart] : null;
+  const actionLabel = engineState === "broken" ? "Llamá al respaldo" : engineState === "diagnosing" ? "Diagnosticando..." : "Pedí tu diagnóstico";
+  const liveMessage = engineState === "broken" ? "Motor roto. Tocá el botón para iniciar el diagnóstico." : engineState === "diagnosing" ? "Diagnosticando. Las piezas están volviendo a su lugar." : "Listo. Ahora responde.";
 
-        <Part id="bolts" selected={selected === "bolts"} className="engine-layer layer-bolts">
-          {[{x:162,y:291,r:8},{x:191,y:332,r:6},{x:606,y:294,r:8},{x:661,y:284,r:6},{x:622,y:518,r:7},{x:270,y:536,r:6},{x:353,y:554,r:6},{x:467,y:544,r:7},{x:690,y:464,r:6}].map(({x,y,r}) => <g key={`${x}-${y}`} transform={`translate(${x} ${y})`}><path d={`M-${r * 1.6} 0 H${r * 1.6} M0 -${r * 1.6} V${r * 1.6}`} stroke="#111518" strokeWidth={r * .8} /><circle r={r} fill="url(#metal)" stroke="#0d1113" strokeWidth="3" /></g>)}
-        </Part>
+  return <div className={`engine-experience state-${engineState}`} ref={stageRef} style={{ "--pointer-x": "0", "--pointer-y": "0" } as React.CSSProperties}>
+    <div className="engine-glow" aria-hidden="true" />
+    <svg className={`engine-svg engine-svg-${engineState}`} viewBox="0 0 420 480" role="group" aria-label="Motor doodle interactivo en estado roto, diagnóstico o reparado">
+      <defs>
+        <filter id="engine-glow"><feGaussianBlur stdDeviation="5" /></filter>
+        <linearGradient id="doodle-metal" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#f2ede3" /><stop offset=".5" stopColor="#6d6a68" /><stop offset="1" stopColor="#17181b" /></linearGradient>
+      </defs>
+      <g className="engine-layer engine-smoke" aria-hidden="true"><path d="M327 113 C303 94 342 76 319 52 C297 31 342 23 325 4" /><path d="M94 174 C67 155 98 132 80 112" /></g>
+      <g className="engine-layer engine-orbit" aria-hidden="true"><ellipse cx="213" cy="285" rx="174" ry="169" /><path d="M36 284 C72 161 326 140 389 274" /></g>
 
-        <g className="engine-layer layer-pan" style={{ "--layer-depth": "0.55" } as React.CSSProperties}><path d="M240 540 H565 L535 617 Q526 636 502 640 H298 Q274 636 266 617Z" fill="url(#metalDark)" stroke="#0d1113" strokeWidth="8" filter="url(#smallShadow)" /><path d="M267 561 H538 M281 585 H525 M304 610 H500" stroke="#aeb3ae" strokeOpacity=".5" strokeWidth="4" /><circle cx="420" cy="615" r="9" fill="#171b1c" stroke="#d2d3cb" strokeWidth="3" /></g>
-      </svg>
+      <Part id="head" selected={selectedPart === "head"} onSelect={setSelectedPart}><g className="head-cover"><path d="M91 118 L117 88 Q121 83 132 83 H291 Q304 83 310 91 L335 119 L326 167 H98Z" fill="url(#doodle-metal)" /><path d="M106 118 H326 M118 100 H298" /><path d="M137 88 V154 M181 85 V157 M225 85 V157 M269 86 V157" className="metal-detail" />{[136,181,226,271].map((x) => <g key={x}><ellipse cx={x} cy="112" rx="14" ry="8" className="port" /><circle cx={x} cy="112" r="4" /></g>)}</g></Part>
 
-      <div className="engine-instruction"><span className="touch-dot" /> Tocá una pieza<br /><small>para conocerla</small></div>
-      <div className={`engine-info ${active ? "is-visible" : ""}`} aria-live="polite">
-        {active && <><span className="info-kicker">Pieza seleccionada</span><strong>{active.name}</strong><p>{active.description}</p><button type="button" onClick={() => setSelected(null)} aria-label="Cerrar información">×</button></>}
-      </div>
-    </div>
-  );
+      <g className="engine-layer engine-block"><path d="M104 171 Q105 154 123 154 H300 Q318 154 321 172 L330 330 Q327 348 307 352 H112 Q93 348 92 330Z" fill="#17191c" stroke="#f2ede3" strokeWidth="3" /><path d="M112 181 H310 M109 315 H319" className="block-detail" /><path d="M127 190 V296 M173 190 V296 M219 190 V296 M265 190 V296" className="cylinder" /></g>
+
+      <Part id="piston" selected={selectedPart === "piston"} onSelect={setSelectedPart}><g className="engine-layer engine-pistons"><g className="piston piston-1"><path d="M119 190 H162 L159 226 Q142 235 123 226Z" fill="#ffd21c" /><path d="M126 225 L130 290 H153 L158 225" fill="url(#doodle-metal)" /><ellipse cx="142" cy="291" rx="14" ry="7" /></g><g className="piston piston-2"><path d="M166 190 H207 L204 226 Q187 235 170 226Z" fill="url(#doodle-metal)" /><path d="M173 225 L177 290 H200 L204 225" fill="url(#doodle-metal)" /><ellipse cx="189" cy="291" rx="14" ry="7" /></g><g className="piston piston-3"><path d="M213 190 H254 L251 226 Q234 235 217 226Z" fill="url(#doodle-metal)" /><path d="M220 225 L224 290 H247 L251 225" fill="url(#doodle-metal)" /><ellipse cx="236" cy="291" rx="14" ry="7" /></g></g></Part>
+
+      <Part id="crankshaft" selected={selectedPart === "crankshaft"} onSelect={setSelectedPart}><g className="engine-layer engine-crankshaft"><path d="M101 324 Q139 299 174 323 T244 323 T314 323" fill="none" stroke="#f2ede3" strokeWidth="15" strokeLinecap="round" /><path d="M101 324 Q139 299 174 323 T244 323 T314 323" fill="none" stroke="#3d3a3c" strokeWidth="8" strokeLinecap="round" />{[122,182,242,302].map((x, index) => <g key={x} transform={`translate(${x} ${index % 2 ? 314 : 332})`}><circle r="23" fill="url(#doodle-metal)" /><circle r="12" fill="#101114" stroke="#f2ede3" strokeWidth="2" /><circle r="4" fill="#ffd21c" /></g>)}</g></Part>
+
+      <Part id="gears" selected={selectedPart === "gears"} onSelect={setSelectedPart}><g className="engine-layer engine-gears"><Gear cx={306} cy={187} radius={30} teeth={12} /><Gear cx={331} cy={252} radius={25} teeth={10} /><Gear cx={299} cy={318} radius={20} teeth={9} /></g></Part>
+
+      <Part id="belt" selected={selectedPart === "belt"} onSelect={setSelectedPart}><g className="engine-layer engine-belt"><path d="M306 158 C370 163 372 266 326 335 C310 358 292 340 306 313 C335 258 342 191 306 158Z" className="belt-loose" /><path d="M306 160 C337 182 345 264 316 319" className="belt-tight" /></g></Part>
+
+      <Part id="bolts" selected={selectedPart === "bolts"} onSelect={setSelectedPart}><g className="engine-layer engine-bolts">{[{ x: 67, y: 142 }, { x: 352, y: 125 }, { x: 53, y: 280 }, { x: 365, y: 316 }, { x: 75, y: 360 }, { x: 340, y: 385 }].map(({ x, y }) => <g key={`${x}-${y}`} className="loose-bolt" transform={`translate(${x} ${y}) rotate(25)`}><path d="M-10 0 H10 M0-10 V10" /><circle r="6" fill="url(#doodle-metal)" /></g>)}</g></Part>
+
+      <g className="engine-layer engine-base"><path d="M119 355 H304 L288 389 Q284 398 272 399 H149 Q137 398 133 389Z" fill="url(#doodle-metal)" /><path d="M136 371 H290" /></g>
+      <path className="diagnostic-line" d="M54 80 V409" aria-hidden="true" />
+      <g className="repair-check" aria-hidden="true"><circle cx="354" cy="76" r="25" /><path d="m342 76 8 8 16-18" /></g>
+    </svg>
+
+    <div className="engine-copy" aria-live="polite"><span className="engine-state-label">{engineState === "broken" ? "01 / Roto" : engineState === "diagnosing" ? "02 / Diagnóstico" : "03 / Responde"}</span><strong>{engineState === "repaired" ? "Listo. Ahora responde." : engineState === "diagnosing" ? "Primero entendemos qué pasa." : "¿Algo no suena bien?"}</strong>{activePart && <div className="part-popover"><small>{activePart.name}</small><p>{activePart.description}</p><button type="button" onClick={() => setSelectedPart(null)} aria-label="Cerrar detalle de pieza">×</button></div>}</div>
+    <p className="engine-live" role="status">{liveMessage}</p>
+    <div className="engine-actions"><button type="button" className="primary-cta engine-action" disabled={engineState === "diagnosing"} onClick={handleAction}><span className="cta-icon" aria-hidden="true">{engineState === "repaired" ? "▣" : engineState === "diagnosing" ? "◌" : "⌁"}</span>{actionLabel}<span className="arrow" aria-hidden="true">↗</span></button><div className="engine-tools"><button type="button" className="sound-toggle" aria-label={soundEnabled ? "Silenciar sonido" : "Activar sonido"} aria-pressed={soundEnabled} onClick={() => { const nextValue = !soundEnabled; setSoundEnabled(nextValue); window.localStorage.setItem("el-respaldo-sound", nextValue ? "on" : "off"); if (!nextValue) stopSounds(); }}>{soundEnabled ? "Sonido on" : "Sonido off"}</button><button type="button" className="reset-button" onClick={resetEngine}>Repetir animación</button></div></div>
+    <p className="engine-hint">Tocá para verlo volver a funcionar</p>
+  </div>;
 }
