@@ -4,14 +4,18 @@ import { useEffect, useRef, useState } from "react";
 
 type EngineState = "broken" | "starting" | "failed" | "repairing" | "fixed";
 type PartId = "head" | "piston" | "crankshaft" | "gears" | "belt" | "bolts";
-type SoundKey = "failed" | "repair" | "correct";
-type AudioPlayback = { element: HTMLAudioElement; gain: GainNode; panner: StereoPannerNode };
+type SoundKey = "dial" | "failed" | "repair" | "correct";
+type AudioPlayback = { element: HTMLAudioElement; gain: GainNode; panner: StereoPannerNode; generation: number };
 
 const soundFiles: Record<SoundKey, string> = {
+  dial: "/audio/marcado-telefonico.mp3",
   failed: "/audio/arranque-fallido.mp3",
   repair: "/audio/reparacion.mp3",
   correct: "/audio/arranque-correcto.mp3",
 };
+
+const callingDuration = 1000;
+const callingFade = 60;
 
 const partInfo: Record<PartId, { name: string; description: string }> = {
   head: { name: "Tapa levantada", description: "Una holgura arriba puede ser la señal de que algo no está sellando bien." },
@@ -41,6 +45,7 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
   const audioElementsRef = useRef<Partial<Record<SoundKey, HTMLAudioElement>>>({});
   const audioPlaybackRef = useRef<Partial<Record<SoundKey, AudioPlayback>>>({});
   const audioGenerationRef = useRef(0);
+  const transitionLockRef = useRef(false);
   const completeTimerRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
   const pointerRef = useRef({ x: 0, y: 0 });
@@ -128,13 +133,14 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
     Object.values(audioPlaybackRef.current).forEach((playback) => {
       if (!playback) return;
       const { element, gain } = playback;
+      const playbackGeneration = playback.generation;
       if (context && !element.paused) {
         gain.gain.cancelScheduledValues(now);
         gain.gain.setValueAtTime(Math.max(gain.gain.value, 0.001), now);
         gain.gain.linearRampToValueAtTime(0.001, now + 0.04);
       }
       window.setTimeout(() => {
-        if (generation !== audioGenerationRef.current) return;
+        if (playback.generation !== playbackGeneration) return;
         element.pause();
         element.currentTime = 0;
       }, 60);
@@ -151,12 +157,12 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
     const panner = context.createStereoPanner();
     gain.gain.value = 0.001;
     mediaSource.connect(gain).connect(panner).connect(masterGainRef.current);
-    const playback = { element, gain, panner };
+    const playback = { element, gain, panner, generation: 0 };
     audioPlaybackRef.current[key] = playback;
     return playback;
   };
 
-  const playSound = (key: SoundKey, volume = 0.7, pan = 0) => {
+  const playSound = (key: SoundKey, volume = 0.7, pan = 0, offset = 0, duration?: number) => {
     if (!soundEnabled) return;
     stopSounds();
     audioGenerationRef.current += 1;
@@ -166,9 +172,10 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
     if (!playback) return;
     const generation = audioGenerationRef.current;
     const { element, gain, panner } = playback;
+    playback.generation = generation;
     const now = context.currentTime;
     element.pause();
-    element.currentTime = 0;
+    element.currentTime = offset;
     panner.pan.value = pan;
     gain.gain.cancelScheduledValues(now);
     gain.gain.setValueAtTime(0.001, now);
@@ -186,6 +193,20 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
         element.currentTime = 0;
       }
     }).catch(() => { /* Audio is optional when the browser blocks playback. */ });
+    if (duration !== undefined) {
+      window.setTimeout(() => {
+        if (generation !== audioGenerationRef.current || playback.generation !== generation) return;
+        const fadeAt = context.currentTime;
+        gain.gain.cancelScheduledValues(fadeAt);
+        gain.gain.setValueAtTime(Math.max(gain.gain.value, 0.001), fadeAt);
+        gain.gain.linearRampToValueAtTime(0.001, fadeAt + callingFade / 1000);
+        window.setTimeout(() => {
+          if (generation !== audioGenerationRef.current || playback.generation !== generation) return;
+          element.pause();
+          element.currentTime = 0;
+        }, callingFade);
+      }, Math.max(0, duration - callingFade / 1000) * 1000);
+    }
   };
 
   const vibrate = (pattern: number | number[]) => {
@@ -194,33 +215,44 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
   };
 
   const startAttempt = () => {
-    if (engineState !== "broken") return;
+    if (transitionLockRef.current || engineState !== "broken") return;
+    transitionLockRef.current = true;
     setSelectedPart(null);
     setEngineState("starting");
     playSound("failed", 0.72);
     vibrate([35, 50, 35]);
-    completeTimerRef.current = window.setTimeout(() => setEngineState("failed"), 3200);
+    completeTimerRef.current = window.setTimeout(() => {
+      transitionLockRef.current = false;
+      setEngineState("failed");
+    }, 3200);
   };
 
   const startRepair = () => {
-    if (engineState !== "failed" || isCalling) return;
+    if (transitionLockRef.current || engineState !== "failed" || isCalling) return;
+    transitionLockRef.current = true;
     setSelectedPart(null);
     setIsCalling(true);
+    playSound("dial", 0.42, 0, 0, callingDuration / 1000);
     vibrate([25, 40, 25]);
     completeTimerRef.current = window.setTimeout(() => {
-      setIsCalling(false);
-      setEngineState("repairing");
-      playSound("repair", 0.72, 0.02);
+      stopSounds();
       completeTimerRef.current = window.setTimeout(() => {
-        setEngineState("fixed");
-        playSound("correct", 0.72);
-        vibrate(60);
-      }, 2400);
-    }, 700);
+        setIsCalling(false);
+        setEngineState("repairing");
+        playSound("repair", 0.78, 0.02);
+        completeTimerRef.current = window.setTimeout(() => {
+          transitionLockRef.current = false;
+          setEngineState("fixed");
+          playSound("correct", 0.72);
+          vibrate(60);
+        }, 2400);
+      }, callingFade);
+    }, callingDuration);
   };
 
   const resetEngine = () => {
     if (completeTimerRef.current) window.clearTimeout(completeTimerRef.current);
+    transitionLockRef.current = false;
     stopSounds();
     setIsCalling(false);
     setSelectedPart(null);
