@@ -4,14 +4,13 @@ import { useEffect, useRef, useState } from "react";
 
 type EngineState = "broken" | "starting" | "failed" | "repairing" | "fixed";
 type PartId = "head" | "piston" | "crankshaft" | "gears" | "belt" | "bolts";
-type SoundKey = "click" | "metalLight000" | "metalLight001" | "metalLight002" | "latch";
+type SoundKey = "failed" | "repair" | "correct";
+type AudioPlayback = { element: HTMLAudioElement; gain: GainNode; panner: StereoPannerNode };
 
 const soundFiles: Record<SoundKey, string> = {
-  click: "/audio/metal-click.ogg",
-  metalLight000: "/audio/metal-light-000.ogg",
-  metalLight001: "/audio/metal-light-001.ogg",
-  metalLight002: "/audio/metal-light-002.ogg",
-  latch: "/audio/metal-latch.ogg",
+  failed: "/audio/arranque-fallido.mp3",
+  repair: "/audio/reparacion.mp3",
+  correct: "/audio/arranque-correcto.mp3",
 };
 
 const partInfo: Record<PartId, { name: string; description: string }> = {
@@ -39,10 +38,8 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
   const stageRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
-  const audioDataRef = useRef<Partial<Record<SoundKey, ArrayBuffer>>>({});
-  const audioPromisesRef = useRef<Partial<Record<SoundKey, Promise<ArrayBuffer | null>>>>({});
-  const audioBuffersRef = useRef<Partial<Record<SoundKey, AudioBuffer>>>({});
-  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
+  const audioElementsRef = useRef<Partial<Record<SoundKey, HTMLAudioElement>>>({});
+  const audioPlaybackRef = useRef<Partial<Record<SoundKey, AudioPlayback>>>({});
   const audioGenerationRef = useRef(0);
   const completeTimerRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
@@ -55,15 +52,16 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
   const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
+    const audioElements = audioElementsRef.current;
     const storedSound = window.localStorage.getItem("el-respaldo-sound");
     if (storedSound !== null) setSoundEnabled(storedSound === "on");
-    if (storedSound !== "off") {
-      Object.entries(soundFiles).forEach(([key, source]) => {
-        const soundKey = key as SoundKey;
-        audioPromisesRef.current[soundKey] = fetch(source).then(async (response) => response.ok ? response.arrayBuffer() : null).catch(() => null);
-        void audioPromisesRef.current[soundKey]?.then((data) => { if (data) audioDataRef.current[soundKey] = data; });
-      });
-    }
+    Object.entries(soundFiles).forEach(([key, source]) => {
+      const soundKey = key as SoundKey;
+      const audio = new Audio(source);
+      audio.preload = "metadata";
+      audioElements[soundKey] = audio;
+      audio.load();
+    });
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     const updateMotion = () => setReducedMotion(mediaQuery.matches);
     updateMotion();
@@ -102,6 +100,7 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
       if (frameRef.current) window.cancelAnimationFrame(frameRef.current);
       if (completeTimerRef.current) window.clearTimeout(completeTimerRef.current);
       stopSounds();
+      Object.values(audioElements).forEach((audio) => { audio?.removeAttribute("src"); audio?.load(); });
       if (audioContextRef.current && audioContextRef.current.state !== "closed") void audioContextRef.current.close();
     };
     // The motion preference is intentionally read once for the pointer listener.
@@ -123,65 +122,70 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
   };
 
   const stopSounds = () => {
-    audioGenerationRef.current += 1;
-    activeSourcesRef.current.forEach((source) => {
-      try { source.stop(); } catch { /* source already ended */ }
-      try { source.disconnect(); } catch { /* source already disconnected */ }
+    const generation = ++audioGenerationRef.current;
+    const context = audioContextRef.current;
+    const now = context?.currentTime ?? 0;
+    Object.values(audioPlaybackRef.current).forEach((playback) => {
+      if (!playback) return;
+      const { element, gain } = playback;
+      if (context && !element.paused) {
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setValueAtTime(Math.max(gain.gain.value, 0.001), now);
+        gain.gain.linearRampToValueAtTime(0.001, now + 0.04);
+      }
+      window.setTimeout(() => {
+        if (generation !== audioGenerationRef.current) return;
+        element.pause();
+        element.currentTime = 0;
+      }, 60);
     });
-    activeSourcesRef.current = [];
-    if (audioContextRef.current?.state === "running") void audioContextRef.current.suspend();
+    if (context?.state === "running") window.setTimeout(() => { if (generation === audioGenerationRef.current && context.state === "running") void context.suspend(); }, 75);
   };
 
-  const getAudioBuffer = async (key: SoundKey, context: AudioContext) => {
-    if (audioBuffersRef.current[key]) return audioBuffersRef.current[key];
-    const data = audioDataRef.current[key] ?? await audioPromisesRef.current[key];
-    if (!data) return null;
-    try {
-      const buffer = await context.decodeAudioData(data.slice(0));
-      audioBuffersRef.current[key] = buffer;
-      return buffer;
-    } catch {
-      return null;
-    }
+  const getAudioPlayback = (key: SoundKey, context: AudioContext) => {
+    if (audioPlaybackRef.current[key]) return audioPlaybackRef.current[key];
+    const element = audioElementsRef.current[key];
+    if (!element || !masterGainRef.current) return null;
+    const mediaSource = context.createMediaElementSource(element);
+    const gain = context.createGain();
+    const panner = context.createStereoPanner();
+    gain.gain.value = 0.001;
+    mediaSource.connect(gain).connect(panner).connect(masterGainRef.current);
+    const playback = { element, gain, panner };
+    audioPlaybackRef.current[key] = playback;
+    return playback;
   };
 
-  const playSound = (kind: "broken" | "start" | "diagnostic" | "fixed") => {
+  const playSound = (key: SoundKey, volume = 0.7, pan = 0) => {
     if (!soundEnabled) return;
     stopSounds();
+    audioGenerationRef.current += 1;
     const context = ensureAudioContext();
     if (!context || !masterGainRef.current) return;
-    void context.resume();
+    const playback = getAudioPlayback(key, context);
+    if (!playback) return;
     const generation = audioGenerationRef.current;
-    const sequence = kind === "start"
-      ? [["click", 0, .1, .42, -.1], ["metalLight000", .1, .31, .7, 0], ["metalLight001", .46, .28, .62, -.08], ["metalLight002", .82, .3, .66, .08], ["click", 1.2, .12, .48, .04]]
-      : kind === "diagnostic"
-        ? [["click", 0, .12, .36, -.3], ["latch", .34, .16, .5, .22], ["metalLight001", .68, .16, .42, .25], ["click", .98, .12, .36, -.2], ["latch", 1.24, .16, .46, -.28], ["metalLight002", 1.58, .19, .48, .28], ["click", 1.96, .14, .52, .12]]
-        : kind === "fixed"
-          ? [["click", 0, .1, .3, 0], ["metalLight000", .13, .34, .48, -.06], ["latch", .52, .18, .3, .06], ["metalLight001", .75, .42, .24, .1]]
-          : [["metalLight000", 0, .16, .35, 0]];
-    sequence.forEach(([key, start, duration, volume, pan]) => {
-      void (async () => {
-        const buffer = await getAudioBuffer(key as SoundKey, context);
-        if (!buffer || generation !== audioGenerationRef.current || !masterGainRef.current) return;
-        const source = context.createBufferSource();
-        const gain = context.createGain();
-        const panner = context.createStereoPanner();
-        const now = context.currentTime;
-        source.buffer = buffer;
-        gain.gain.setValueAtTime(.001, now + (start as number));
-        gain.gain.linearRampToValueAtTime(volume as number, now + (start as number) + .008);
-        gain.gain.linearRampToValueAtTime(.001, now + (start as number) + (duration as number));
-        panner.pan.value = pan as number;
-        source.connect(gain).connect(panner).connect(masterGainRef.current);
-        source.onended = () => {
-          activeSourcesRef.current = activeSourcesRef.current.filter((activeSource) => activeSource !== source);
-          try { source.disconnect(); gain.disconnect(); panner.disconnect(); } catch { /* cleanup is best effort */ }
-        };
-        activeSourcesRef.current.push(source);
-        source.start(now + (start as number));
-        source.stop(now + (start as number) + (duration as number) + .02);
-      })();
-    });
+    const { element, gain, panner } = playback;
+    const now = context.currentTime;
+    element.pause();
+    element.currentTime = 0;
+    panner.pan.value = pan;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(volume, now + 0.035);
+    element.onended = () => {
+      if (generation !== audioGenerationRef.current) return;
+      const endedAt = context.currentTime;
+      gain.gain.cancelScheduledValues(endedAt);
+      gain.gain.linearRampToValueAtTime(0.001, endedAt + 0.04);
+    };
+    void context.resume();
+    void element.play().then(() => {
+      if (generation !== audioGenerationRef.current) {
+        element.pause();
+        element.currentTime = 0;
+      }
+    }).catch(() => { /* Audio is optional when the browser blocks playback. */ });
   };
 
   const vibrate = (pattern: number | number[]) => {
@@ -193,9 +197,9 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
     if (engineState !== "broken") return;
     setSelectedPart(null);
     setEngineState("starting");
-    playSound("start");
+    playSound("failed", 0.72);
     vibrate([35, 50, 35]);
-    completeTimerRef.current = window.setTimeout(() => setEngineState("failed"), 1200);
+    completeTimerRef.current = window.setTimeout(() => setEngineState("failed"), 3200);
   };
 
   const startRepair = () => {
@@ -206,12 +210,12 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
     completeTimerRef.current = window.setTimeout(() => {
       setIsCalling(false);
       setEngineState("repairing");
-      playSound("diagnostic");
+      playSound("repair", 0.72, 0.02);
       completeTimerRef.current = window.setTimeout(() => {
         setEngineState("fixed");
-        playSound("fixed");
+        playSound("correct", 0.72);
         vibrate(60);
-      }, reducedMotion ? 1000 : 2400);
+      }, 2400);
     }, 700);
   };
 
@@ -221,7 +225,6 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
     setIsCalling(false);
     setSelectedPart(null);
     setEngineState("broken");
-    playSound("broken");
   };
 
   const handleAction = () => {
@@ -239,7 +242,7 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
     fixed: { eyebrow: "Después de pasar por El Respaldo.", title: "Listo. Ahora responde.", subcopy: "Primero entendimos qué pasaba. Después lo arreglamos.", hint: "", label: "04 / Responde" },
   }[engineState];
   const actionLabel = engineState === "broken" ? "INTENTÁ ARRANCAR" : engineState === "starting" ? "INTENTANDO…" : isCalling ? "LLAMANDO AL RESPALDO…" : engineState === "failed" ? "REPARAR" : engineState === "repairing" ? "REPARANDO…" : "PEDÍ TU DIAGNÓSTICO";
-  const liveMessage = engineState === "broken" ? "Motor roto. Tocá Intentá arrancar para iniciar la historia." : engineState === "starting" ? "Intento de arranque en curso." : isCalling ? "Llamando al respaldo. El botón está deshabilitado." : engineState === "failed" ? "El motor no arranca. Tocá Reparar para iniciar la reparación." : engineState === "repairing" ? "Reparando. Las piezas están volviendo a su lugar." : "Listo. Ahora responde. Tocá Pedí tu diagnóstico para abrir WhatsApp.";
+  const liveMessage = engineState === "broken" ? "Motor roto. Tocá Intentá arrancar para iniciar la historia." : engineState === "starting" ? "Intento de arranque en curso." : isCalling ? "Llamando al respaldo. El botón está deshabilitado." : engineState === "failed" ? "NO ARRANCA. NO INSISTAS. Tocá Reparar para iniciar la reparación." : engineState === "repairing" ? "Reparando. Las piezas están volviendo a su lugar." : "LISTO. AHORA RESPONDE. Tocá Pedí tu diagnóstico para abrir WhatsApp.";
 
   return <div className={`engine-experience state-${engineState}`} ref={stageRef} style={{ "--pointer-x": "0", "--pointer-y": "0" } as React.CSSProperties}>
     <div className="engine-glow" aria-hidden="true" />
