@@ -1,0 +1,85 @@
+/* Studio engine presentation. The existing story, sound and contact flow remain in EngineExplorer. */
+.hero{--yellow:#e6b273;background:#080909;min-height:100svh;padding:120px clamp(20px,5vw,72px) 60px}
+.hero::before,.hero::after,.hero-noise,.hero .scroll-cue{display:none}
+.hero-interaction{height:auto;max-width:1200px}
+.engine-experience{display:flex;flex-direction:column;align-items:center;height:auto;isolation:isolate}
+.studio-heading{position:relative;z-index:2;text-align:center;pointer-events:none}
+.studio-heading p{color:#b7aaa0;font-size:10px;letter-spacing:.35em;margin:0 0 12px;text-transform:uppercase}
+.hero .studio-heading h1{color:#f7efe2;font:900 clamp(66px,8.6vw,136px)/.9 'Barlow Condensed',Impact,sans-serif;letter-spacing:-.025em;margin:0;max-width:none;text-transform:uppercase}
+.engine-art{position:relative;width:min(100%,calc((100svh - 400px)*1.5),1020px);min-width:min(100%,600px);aspect-ratio:3/2;margin:10px auto 0}
+.engine-visual,.engine-hotspots{position:absolute;inset:0}
+.engine-visual{transform:translate3d(calc(var(--pointer-x)*4px),calc(var(--pointer-y)*3px),0);will-change:transform}
+.engine-render{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:contain;mask-image:radial-gradient(ellipse at 50% 48%,#000 53%,transparent 78%)}
+.engine-render-fixed{opacity:0}
+.state-starting .engine-visual{animation:studio-start .14s ease-in-out 20}
+.state-repairing .engine-render-broken{animation:studio-disassemble-out 2.4s ease both}
+.state-repairing .engine-render-fixed{animation:studio-assemble-in 2.4s ease both}
+.state-fixed .engine-render-broken{opacity:0}
+.state-fixed .engine-render-fixed{opacity:1}
+.state-fixed .engine-visual{animation:studio-idle .24s ease-in-out 12}
+.engine-scan{position:absolute;inset:12% 8%;opacity:0;border-left:1px solid #e6b273;pointer-events:none}
+.state-repairing .engine-scan{animation:studio-scan 2.4s ease-in-out both}
+.engine-hotspots{transform:translate3d(calc(var(--pointer-x)*4px),calc(var(--pointer-y)*3px),0)}
+.engine-hotspot{position:absolute;padding:0;border:0;border-radius:12px;background:transparent;cursor:help;min-width:44px;min-height:44px;-webkit-tap-highlight-color:transparent}
+.engine-hotspot:focus-visible,.engine-hotspot.is-selected{outline:1px solid #f3c483;outline-offset:3px;background:#e6b2730d;box-shadow:0 0 22px #e6b27324}
+.engine-hotspot:disabled{cursor:wait}
+@media(hover:hover){.engine-hotspot:hover{background:#e6b2730a;outline:1px solid #e6b27355}}
+.hotspot-head{left:32%;top:3%;width:39%;height:25%}
+.hotspot-piston{left:32%;top:28%;width:22%;height:24%}
+.hotspot-crankshaft{left:27%;top:52%;width:41%;height:23%}
+.hotspot-gears{left:67%;top:25%;width:12%;height:20%}
+.hotspot-belt{left:73%;top:44%;width:9%;height:21%}
+.hotspot-bolts{left:65%;top:79%;width:18%;height:16%}
+.state-fixed .hotspot-head{left:31%;top:8%;width:40%;height:24%}
+.state-fixed .hotspot-piston{left:43%;top:40%;width:18%;height:20%}
+.state-fixed .hotspot-crankshaft{left:60%;top:58%;width:20%;height:28%}
+.state-fixed .hotspot-gears{left:64%;top:24%;width:13%;height:19%}
+.state-fixed .hotspot-belt{left:65%;top:43%;width:11%;height:17%}
+.state-fixed .hotspot-bolts{left:47%;top:69%;width:13%;height:12%}
+.engine-art .part-popover{position:absolute;z-index:5;left:50%;bottom:4%;transform:translateX(-50%);width:min(320px,90%);max-width:320px;margin:0;padding:16px 30px 16px 18px;background:#111414f5;box-shadow:0 12px 32px #0008}
+.engine-art .part-popover small{font-size:11px}
+.engine-art .part-popover p{font-size:11px}
+.engine-art .part-popover button{width:30px;height:32px;top:4px;right:2px}
+.engine-ready{position:absolute;right:15%;bottom:16%;display:grid;place-items:center;width:36px;height:36px;border:1px solid #e6b273;border-radius:50%;color:#e6b273;background:#0b100de6;font-size:20px}
+.engine-experience .engine-copy{position:relative;top:auto;left:auto;bottom:auto;order:initial;width:100%;max-width:650px;text-align:center;z-index:2}
+.engine-eyebrow{justify-content:center;color:#a69e94;font-size:9px;letter-spacing:.12em;margin:0 0 8px}
+.engine-eyebrow span{width:20px;height:1px}
+.engine-copy h2{font:700 clamp(26px,3vw,40px)/1.05 'Barlow Condensed',Impact,sans-serif;letter-spacing:-.01em;margin:0 0 8px;text-transform:uppercase}
+.engine-subcopy{font-size:12px;line-height:1.5;max-width:none;margin:0;color:#c0b7ab}
+.engine-state-label{margin:10px 0 0;color:#e6b273;font-size:9px}
+.engine-experience .engine-actions{position:relative;inset:auto;order:initial;width:min(100%,390px);margin:20px auto 0}
+.engine-action{width:100%;min-width:0;min-height:58px;font-size:19px;gap:14px;padding:16px 22px;border-radius:6px;box-shadow:0 0 30px #e6b27315}
+.engine-action:focus-visible,.engine-tools button:focus-visible{outline:2px solid #f5d2a0;outline-offset:5px}
+.engine-action:hover{background:#f4cb94}
+.engine-action:disabled{transform:none}
+.engine-tools{width:100%;margin-top:12px}
+.engine-tools button{padding:8px 0;min-height:36px}
+.engine-experience .engine-hint{position:relative;inset:auto;order:initial;font-size:10px;color:#d3c4b0;margin:10px 0 0;min-height:15px}
+@keyframes studio-start{0%,100%{translate:0 0}40%{translate:-1.5px 1px}70%{translate:1.5px -1px}}
+@keyframes studio-idle{0%,100%{translate:0 0}50%{translate:0 .5px}}
+@keyframes studio-disassemble-out{0%,25%{opacity:1;scale:1}90%,100%{opacity:0;scale:.94}}
+@keyframes studio-assemble-in{0%,25%{opacity:0;scale:1.04}90%,100%{opacity:1;scale:1}}
+@keyframes studio-scan{0%,100%{opacity:0;translate:0 0}20%{opacity:.7}80%{opacity:.7;translate:84% 0}}
+@media(max-width:980px){.hero{min-height:0}.hero-interaction{height:auto}.engine-art{width:min(100%,800px);min-width:0}}
+@media(max-width:650px){
+  .hero{padding:112px 20px 36px}
+  .studio-heading p{font-size:8px;letter-spacing:.28em;margin-bottom:10px}
+  .hero .studio-heading h1{font-size:clamp(58px,15vw,92px)}
+  .engine-art{width:calc(100% + 40px);min-width:0;margin:18px -20px 12px}
+  .engine-experience .engine-copy{width:100%}
+  .engine-eyebrow{font-size:8px;margin-bottom:8px}
+  .engine-copy h2{font-size:30px}
+  .engine-subcopy{font-size:11px;max-width:32ch;margin-inline:auto}
+  .engine-state-label{margin-top:10px}
+  .engine-experience .engine-actions{margin-top:20px;width:100%}
+  .engine-action{font-size:18px;padding:17px 14px;min-height:58px}
+  .engine-ready{width:28px;height:28px;font-size:16px}
+  .engine-experience .engine-hint{font-size:9px}
+}
+@media(prefers-reduced-motion:reduce){
+  .engine-visual,.engine-hotspots{transform:none;will-change:auto;animation:none!important}
+  .engine-render,.engine-scan{animation:none!important}
+  .state-repairing .engine-render-broken{opacity:0}
+  .state-repairing .engine-render-fixed{opacity:1}
+  .state-repairing .engine-scan{opacity:0}
+}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { siteData } from "../lib/site-data";
 import "./globals.css";
+import "./engine-studio.css";
 
 export const metadata: Metadata = {
   title: `${siteData.name} | ${siteData.descriptor}`,
