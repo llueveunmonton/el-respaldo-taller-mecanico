@@ -1,5 +1,7 @@
 export const siteData = {
-  name: "El Respaldo",
+  name: "Taller Nébulo",
+  shortName: "Nébulo",
+  monogram: "TN",
   descriptor: "Mecánica automotriz",
   eyebrow: "Taller de confianza en tu barrio",
   headline: "Mecánica que responde.",
@@ -9,7 +11,7 @@ export const siteData = {
   contact: {
     // Completar con el número real cuando el negocio lo confirme.
     whatsappNumber: "",
-    whatsappUrl: "https://wa.me/?text=Hola%20El%20Respaldo%2C%20quiero%20pedir%20un%20diagn%C3%B3stico.",
+    whatsappUrl: "https://wa.me/?text=Hola%20Taller%20N%C3%A9bulo%2C%20quiero%20pedir%20un%20diagn%C3%B3stico.",
     instagramUrl: "",
     instagramLabel: "Instagram",
     location: "Ubicación a confirmar",

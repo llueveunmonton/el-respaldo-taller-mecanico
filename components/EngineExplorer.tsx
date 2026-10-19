@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { siteData } from "../lib/site-data";
 
 type MotionMode = "auto" | "full" | "reduced";
 
@@ -54,7 +55,7 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
 
   useEffect(() => {
     const audioElements = audioElementsRef.current;
-    const storedSound = window.localStorage.getItem("el-respaldo-sound");
+    const storedSound = window.localStorage.getItem("taller-nebulo-sound");
     if (storedSound !== null) setSoundEnabled(storedSound === "on");
     Object.entries(soundFiles).forEach(([key, source]) => {
       const soundKey = key as SoundKey;
@@ -266,14 +267,14 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
     broken: { eyebrow: "Hay días que empiezan así.", title: "Tu auto no arranca.", subcopy: "Probás una vez. Otra. Y nada.", hint: "Tocá para escuchar qué pasa", label: "01 / Roto" },
     starting: { eyebrow: "Intentemos una vez.", title: "A ver si responde.", subcopy: "Un intento más. Escuchá con atención.", hint: "", label: "01 / Arranque" },
     failed: { eyebrow: "Era por ahí.", title: "No arranca. No insistas.", subcopy: "Primero hay que entender qué está pasando.", hint: "", label: "02 / Fallo" },
-    repairing: { eyebrow: "El Respaldo ya está en eso.", title: "Primero entendemos.", subcopy: "Revisamos. Diagnosticamos. Reparamos.", hint: "", label: "03 / Reparación" },
-    fixed: { eyebrow: "Después de pasar por El Respaldo.", title: "Listo. Ahora responde.", subcopy: "Primero entendimos qué pasaba. Después lo arreglamos.", hint: "", label: "04 / Responde" },
+    repairing: { eyebrow: `${siteData.shortName} ya está en eso.`, title: "Primero entendemos.", subcopy: "Revisamos. Diagnosticamos. Reparamos.", hint: "", label: "03 / Reparación" },
+    fixed: { eyebrow: `Después de pasar por ${siteData.shortName}.`, title: "Listo. Ahora responde.", subcopy: "Primero entendimos qué pasaba. Después lo arreglamos.", hint: "", label: "04 / Responde" },
   }[engineState];
-  const actionLabel = engineState === "broken" ? "INTENTÁ ARRANCAR" : engineState === "starting" ? "INTENTANDO…" : isCalling ? "LLAMANDO AL RESPALDO…" : engineState === "failed" ? "REPARAR" : engineState === "repairing" ? "REPARANDO…" : "PEDÍ TU DIAGNÓSTICO";
-  const liveMessage = engineState === "broken" ? "Motor roto. Tocá Intentá arrancar para iniciar la historia." : engineState === "starting" ? "Intento de arranque en curso." : isCalling ? "Llamando al respaldo. El botón está deshabilitado." : engineState === "failed" ? "NO ARRANCA. NO INSISTAS. Tocá Reparar para iniciar la reparación." : engineState === "repairing" ? "Reparando. Las piezas están volviendo a su lugar." : "LISTO. AHORA RESPONDE. Tocá Pedí tu diagnóstico para abrir WhatsApp.";
+  const actionLabel = engineState === "broken" ? "INTENTÁ ARRANCAR" : engineState === "starting" ? "INTENTANDO…" : isCalling ? `LLAMANDO A ${siteData.shortName.toUpperCase()}…` : engineState === "failed" ? "REPARAR" : engineState === "repairing" ? "REPARANDO…" : "PEDÍ TU DIAGNÓSTICO";
+  const liveMessage = engineState === "broken" ? "Motor roto. Tocá Intentá arrancar para iniciar la historia." : engineState === "starting" ? "Intento de arranque en curso." : isCalling ? `Llamando a ${siteData.shortName}. El botón está deshabilitado.` : engineState === "failed" ? "NO ARRANCA. NO INSISTAS. Tocá Reparar para iniciar la reparación." : engineState === "repairing" ? "Reparando. Las piezas están volviendo a su lugar." : "LISTO. AHORA RESPONDE. Tocá Pedí tu diagnóstico para abrir WhatsApp.";
 
   return <div className={`engine-experience state-${engineState}${isCalling ? " is-calling" : ""}`} data-motion={motionMode} ref={stageRef} style={{ "--pointer-x": "0", "--pointer-y": "0", "--starting-duration": `${startingDuration}ms`, "--repairing-duration": `${repairingDuration}ms`, "--calling-duration": `${callingDuration}ms` } as React.CSSProperties}>
-    <div className="studio-heading"><p>Mecánica automotriz</p><h1 id="hero-title">El Respaldo</h1></div>
+    <div className="studio-heading"><p>Mecánica automotriz</p><h1 id="hero-title">{siteData.name}</h1></div>
     <div className="engine-art" role="group" aria-label={`Motor interactivo: ${engineState === "fixed" ? "reparado y armado" : "desarmado para diagnóstico"}`}>
       <div className="engine-visual" aria-hidden="true"><div className="engine-motion">
         <Image className="engine-render engine-render-broken" src="/images/engine-exploded.webp" width={1536} height={1024} alt="" priority sizes="(max-width: 650px) 100vw, (max-width: 1100px) 80vw, 1020px" quality={85} />
@@ -288,7 +289,7 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
     </div>
     <div className="engine-copy" aria-live="polite"><div className="engine-story-frame" key={engineState}><p className="engine-eyebrow"><span />{story.eyebrow}</p><h2>{story.title}</h2><p className="engine-subcopy">{story.subcopy}</p><span className="engine-state-label">{story.label}</span></div></div>
     <p className="engine-live" role="status">{liveMessage}</p>
-    <div className="engine-actions"><button type="button" className="primary-cta engine-action" disabled={engineState === "starting" || isCalling || engineState === "repairing"} onClick={handleAction}><span className="cta-icon" aria-hidden="true">{engineState === "fixed" ? "▣" : engineState === "starting" || isCalling || engineState === "repairing" ? "◌" : "⌁"}</span><span className="engine-action-label" key={actionLabel}>{actionLabel}</span><span className="arrow" aria-hidden="true">↗</span></button><div className="engine-tools"><button type="button" className="sound-toggle" aria-label={soundEnabled ? "Silenciar sonido" : "Activar sonido"} aria-pressed={soundEnabled} onClick={() => { const nextValue = !soundEnabled; setSoundEnabled(nextValue); window.localStorage.setItem("el-respaldo-sound", nextValue ? "on" : "off"); if (!nextValue) stopSounds(); }}>{soundEnabled ? "SONIDO ON" : "SONIDO OFF"}</button><button type="button" className="motion-toggle" aria-label={motionEnabled ? "Reducir animaciones" : "Activar animaciones"} aria-pressed={motionEnabled} onClick={() => { const nextMode = motionEnabled ? "reduced" : "full"; setMotionMode(nextMode); }}>{motionEnabled ? "ANIMACIONES ON" : "ANIMACIONES OFF"}</button>{engineState === "fixed" && <button type="button" className="reset-button" onClick={resetEngine}>Repetir historia</button>}</div></div>
+    <div className="engine-actions"><button type="button" className="primary-cta engine-action" disabled={engineState === "starting" || isCalling || engineState === "repairing"} onClick={handleAction}><span className="cta-icon" aria-hidden="true">{engineState === "fixed" ? "▣" : engineState === "starting" || isCalling || engineState === "repairing" ? "◌" : "⌁"}</span><span className="engine-action-label" key={actionLabel}>{actionLabel}</span><span className="arrow" aria-hidden="true">↗</span></button><div className="engine-tools"><button type="button" className="sound-toggle" aria-label={soundEnabled ? "Silenciar sonido" : "Activar sonido"} aria-pressed={soundEnabled} onClick={() => { const nextValue = !soundEnabled; setSoundEnabled(nextValue); window.localStorage.setItem("taller-nebulo-sound", nextValue ? "on" : "off"); if (!nextValue) stopSounds(); }}>{soundEnabled ? "SONIDO ON" : "SONIDO OFF"}</button><button type="button" className="motion-toggle" aria-label={motionEnabled ? "Reducir animaciones" : "Activar animaciones"} aria-pressed={motionEnabled} onClick={() => { const nextMode = motionEnabled ? "reduced" : "full"; setMotionMode(nextMode); }}>{motionEnabled ? "ANIMACIONES ON" : "ANIMACIONES OFF"}</button>{engineState === "fixed" && <button type="button" className="reset-button" onClick={resetEngine}>Repetir historia</button>}</div></div>
     <p className="engine-hint">{story.hint}</p>
   </div>;
 }

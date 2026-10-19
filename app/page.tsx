@@ -5,7 +5,7 @@ import EngineExplorer from "../components/EngineExplorer";
 import { siteData, type ServiceIcon } from "../lib/site-data";
 
 function Logo({ compact = false }: { compact?: boolean }) {
-  return <a href="#inicio" className={`brand ${compact ? "brand-compact" : ""}`} aria-label="El Respaldo, volver al inicio"><span className="brand-mark"><span>ER</span></span><span className="brand-copy"><strong>EL RESPALDO</strong><small>{siteData.descriptor}</small></span></a>;
+  return <a href="#inicio" className={`brand ${compact ? "brand-compact" : ""}`} aria-label={`${siteData.name}, volver al inicio`}><span className="brand-mark"><span>{siteData.monogram}</span></span><span className="brand-copy"><strong>{siteData.name.toUpperCase()}</strong><small>{siteData.descriptor}</small></span></a>;
 }
 
 function Arrow() { return <span className="arrow" aria-hidden="true">↗</span>; }
@@ -52,12 +52,12 @@ export default function Home() {
     </section>
 
     <section className="workshop-section" id="taller" aria-labelledby="workshop-title">
-      <div className="workshop-heading"><span className="section-number">04 / 04</span><h2 id="workshop-title">Así se ve<br /><em>el respaldo.</em></h2><p>Un taller de barrio con mirada técnica, herramientas reales y lugar para hacer las cosas con calma.</p></div>
+      <div className="workshop-heading"><span className="section-number">04 / 04</span><h2 id="workshop-title">Así se ve<br /><em>nuestro trabajo.</em></h2><p>Un taller de barrio con mirada técnica, herramientas reales y lugar para hacer las cosas con calma.</p></div>
       <div className="gallery">{siteData.gallery.map((photo, index) => <figure className={`gallery-item gallery-${index + 1}`} key={photo.label} style={{ backgroundImage: `url(${photo.image})` }}><div className="photo-shade" /><figcaption><span>{photo.label}</span><strong>{photo.caption}</strong></figcaption></figure>)}</div>
     </section>
 
     <section className="final-cta" id="contacto"><div className="final-grid" aria-hidden="true" /><p className="eyebrow"><span />El próximo paso es simple</p><h2>Que tu auto<br /><em>responda.</em></h2><p className="final-copy">Contanos qué sentís al manejarlo.<br />Arrancamos por ahí.</p><a href={whatsapp} className="primary-cta" target="_blank" rel="noreferrer"><span className="cta-tool">✣</span>Pedí tu diagnóstico <Arrow /></a></section>
 
-    <footer className="site-footer"><Logo compact /><div className="footer-detail"><span>Encontranos</span><strong>{siteData.contact.location}</strong></div><div className="footer-detail"><span>Estamos</span><strong>{siteData.contact.hours}</strong></div><a className="footer-social" href={siteData.contact.instagramUrl || "#contacto"} target={siteData.contact.instagramUrl ? "_blank" : undefined} rel={siteData.contact.instagramUrl ? "noreferrer" : undefined}>{siteData.contact.instagramLabel} <Arrow /></a><p className="copyright">© {new Date().getFullYear()} El Respaldo</p></footer>
+    <footer className="site-footer"><Logo compact /><div className="footer-detail"><span>Encontranos</span><strong>{siteData.contact.location}</strong></div><div className="footer-detail"><span>Estamos</span><strong>{siteData.contact.hours}</strong></div><a className="footer-social" href={siteData.contact.instagramUrl || "#contacto"} target={siteData.contact.instagramUrl ? "_blank" : undefined} rel={siteData.contact.instagramUrl ? "noreferrer" : undefined}>{siteData.contact.instagramLabel} <Arrow /></a><p className="copyright">© {new Date().getFullYear()} {siteData.name}</p></footer>
   </main>;
 }
