@@ -11,14 +11,15 @@
 .engine-visual{transform:translate3d(calc(var(--pointer-x)*4px),calc(var(--pointer-y)*3px),0);will-change:transform}
 .engine-render{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:contain;mask-image:radial-gradient(ellipse at 50% 48%,#000 53%,transparent 78%)}
 .engine-render-fixed{opacity:0}
-.state-starting .engine-visual{animation:studio-start .14s ease-in-out 20}
-.state-repairing .engine-render-broken{animation:studio-disassemble-out 2.4s ease both}
-.state-repairing .engine-render-fixed{animation:studio-assemble-in 2.4s ease both}
+.state-starting .engine-visual{animation:studio-start-sequence var(--starting-duration) linear both}
+.state-failed .engine-visual{animation:studio-failed-settle .65s cubic-bezier(.2,.7,.2,1) both}
+.state-repairing .engine-render-broken{animation:studio-disassemble-out var(--repairing-duration) ease both}
+.state-repairing .engine-render-fixed{animation:studio-assemble-in var(--repairing-duration) cubic-bezier(.2,.7,.2,1) both}
 .state-fixed .engine-render-broken{opacity:0}
 .state-fixed .engine-render-fixed{opacity:1}
-.state-fixed .engine-visual{animation:studio-idle .24s ease-in-out 12}
-.engine-scan{position:absolute;inset:12% 8%;opacity:0;border-left:1px solid #e6b273;pointer-events:none}
-.state-repairing .engine-scan{animation:studio-scan 2.4s ease-in-out both}
+.state-fixed .engine-visual{animation:studio-running-settle .9s ease-out both}
+.engine-scan{position:absolute;top:10%;left:8%;right:8%;height:16%;opacity:0;border-top:1px solid #e6b273a0;background:linear-gradient(#e6b27312,transparent);pointer-events:none}
+.state-repairing .engine-scan{animation:studio-scan var(--repairing-duration) ease-in-out both}
 .engine-hotspots{transform:translate3d(calc(var(--pointer-x)*4px),calc(var(--pointer-y)*3px),0)}
 .engine-hotspot{position:absolute;padding:0;border:0;border-radius:12px;background:transparent;cursor:help;min-width:44px;min-height:44px;-webkit-tap-highlight-color:transparent}
 .engine-hotspot:focus-visible,.engine-hotspot.is-selected{outline:1px solid #f3c483;outline-offset:3px;background:#e6b2730d;box-shadow:0 0 22px #e6b27324}
@@ -40,8 +41,9 @@
 .engine-art .part-popover small{font-size:11px}
 .engine-art .part-popover p{font-size:11px}
 .engine-art .part-popover button{width:30px;height:32px;top:4px;right:2px}
-.engine-ready{position:absolute;right:15%;bottom:16%;display:grid;place-items:center;width:36px;height:36px;border:1px solid #e6b273;border-radius:50%;color:#e6b273;background:#0b100de6;font-size:20px}
-.engine-experience .engine-copy{position:relative;top:auto;left:auto;bottom:auto;order:initial;width:100%;max-width:650px;text-align:center;z-index:2}
+.engine-ready{position:absolute;right:15%;bottom:16%;display:grid;place-items:center;width:36px;height:36px;border:1px solid #e6b273;border-radius:50%;color:#e6b273;background:#0b100de6;font-size:20px;animation:studio-ready-in .65s cubic-bezier(.16,1,.3,1) both}
+.engine-experience .engine-copy{position:relative;top:auto;left:auto;bottom:auto;order:initial;width:100%;max-width:650px;min-height:112px;text-align:center;z-index:2}
+.engine-story-frame{animation:studio-copy-in .5s cubic-bezier(.2,.7,.2,1) both}
 .engine-eyebrow{justify-content:center;color:#a69e94;font-size:9px;letter-spacing:.12em;margin:0 0 8px}
 .engine-eyebrow span{width:20px;height:1px}
 .engine-copy h2{font:700 clamp(26px,3vw,40px)/1.05 'Barlow Condensed',Impact,sans-serif;letter-spacing:-.01em;margin:0 0 8px;text-transform:uppercase}
@@ -52,21 +54,40 @@
 .engine-action:focus-visible,.engine-tools button:focus-visible{outline:2px solid #f5d2a0;outline-offset:5px}
 .engine-action:hover{background:#f4cb94}
 .engine-action:disabled{transform:none}
+.engine-action-label{animation:studio-label-in .3s ease-out both}
+.engine-action:disabled .cta-icon{display:inline-block;animation:studio-working-spin 1.5s linear infinite}
+.is-calling .engine-action .cta-icon{animation:studio-call-ring .24s ease-in-out 4}
+.is-calling .engine-action{animation:studio-calling var(--calling-duration) ease-in-out both}
 .engine-tools{width:100%;margin-top:12px}
 .engine-tools button{padding:8px 0;min-height:36px}
 .engine-experience .engine-hint{position:relative;inset:auto;order:initial;font-size:10px;color:#d3c4b0;margin:10px 0 0;min-height:15px}
-@keyframes studio-start{0%,100%{translate:0 0}40%{translate:-1.5px 1px}70%{translate:1.5px -1px}}
-@keyframes studio-idle{0%,100%{translate:0 0}50%{translate:0 .5px}}
-@keyframes studio-disassemble-out{0%,25%{opacity:1;scale:1}90%,100%{opacity:0;scale:.94}}
-@keyframes studio-assemble-in{0%,25%{opacity:0;scale:1.04}90%,100%{opacity:1;scale:1}}
-@keyframes studio-scan{0%,100%{opacity:0;translate:0 0}20%{opacity:.7}80%{opacity:.7;translate:84% 0}}
+/* The state durations come from the same constants as the audio/story timers. */
+@keyframes studio-start-sequence{
+  0%,15%,30%,45%,60%,75%,100%{translate:0 0;rotate:0deg}
+  5%,20%,35%,50%,65%{translate:-2px 1px;rotate:-.2deg}
+  10%,25%,40%,55%,70%{translate:2px -1px;rotate:.2deg}
+  82%{translate:-3px 1px;rotate:-.3deg}
+  87%{translate:2px 0;rotate:.2deg}
+  93%{translate:0 2px;rotate:0deg}
+}
+@keyframes studio-failed-settle{0%{translate:0 0;rotate:0deg}25%{translate:0 5px;rotate:-.45deg}65%{translate:0 -1px;rotate:.1deg}100%{translate:0 0;rotate:0deg}}
+@keyframes studio-running-settle{0%{translate:0 0}15%{translate:0 -2px}30%{translate:0 1px}45%{translate:0 -1px}65%{translate:0 .5px}100%{translate:0 0}}
+@keyframes studio-disassemble-out{0%,15%{opacity:1;scale:1;translate:0 0}65%,100%{opacity:0;scale:.96;translate:0 8px}}
+@keyframes studio-assemble-in{0%,15%{opacity:0;scale:1.06;clip-path:inset(0 0 100% 0);translate:0 -10px}35%{opacity:1}90%,100%{opacity:1;scale:1;clip-path:inset(0);translate:0 0}}
+@keyframes studio-scan{0%,100%{opacity:0;translate:0 0}18%{opacity:1;translate:0 0}82%{opacity:1;translate:0 450%}95%{opacity:0;translate:0 450%}}
+@keyframes studio-copy-in{from{opacity:0;translate:0 9px}to{opacity:1;translate:0 0}}
+@keyframes studio-label-in{from{opacity:.2;translate:0 4px}to{opacity:1;translate:0 0}}
+@keyframes studio-ready-in{from{opacity:0;scale:.65;rotate:-15deg}to{opacity:1;scale:1;rotate:0deg}}
+@keyframes studio-working-spin{to{rotate:360deg}}
+@keyframes studio-call-ring{0%,100%{rotate:-14deg}50%{rotate:14deg}}
+@keyframes studio-calling{0%,100%{box-shadow:0 0 30px #e6b27315}50%{box-shadow:0 0 0 7px #e6b27318,0 0 35px #e6b27330}}
 @media(max-width:980px){.hero{min-height:0}.hero-interaction{height:auto}.engine-art{width:min(100%,800px);min-width:0}}
 @media(max-width:650px){
   .hero{padding:112px 20px 36px}
   .studio-heading p{font-size:8px;letter-spacing:.28em;margin-bottom:10px}
   .hero .studio-heading h1{font-size:clamp(58px,15vw,92px)}
   .engine-art{width:calc(100% + 40px);min-width:0;margin:18px -20px 12px}
-  .engine-experience .engine-copy{width:100%}
+  .engine-experience .engine-copy{width:100%;min-height:132px}
   .engine-eyebrow{font-size:8px;margin-bottom:8px}
   .engine-copy h2{font-size:30px}
   .engine-subcopy{font-size:11px;max-width:32ch;margin-inline:auto}
@@ -78,7 +99,7 @@
 }
 @media(prefers-reduced-motion:reduce){
   .engine-visual,.engine-hotspots{transform:none;will-change:auto;animation:none!important}
-  .engine-render,.engine-scan{animation:none!important}
+  .engine-render,.engine-scan,.engine-story-frame,.engine-action-label,.engine-action,.engine-action .cta-icon,.engine-ready{animation:none!important}
   .state-repairing .engine-render-broken{opacity:0}
   .state-repairing .engine-render-fixed{opacity:1}
   .state-repairing .engine-scan{opacity:0}
