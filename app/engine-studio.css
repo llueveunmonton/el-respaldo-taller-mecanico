@@ -2,7 +2,7 @@
 .hero{--yellow:#e6b273;background:#080909;min-height:100svh;padding:120px clamp(20px,5vw,72px) 60px}
 .hero::before,.hero::after,.hero-noise,.hero .scroll-cue{display:none}
 .hero-interaction{height:auto;max-width:1200px}
-.engine-experience{display:flex;flex-direction:column;align-items:center;height:auto;isolation:isolate}
+.engine-experience{--engine-shake-x:6px;--engine-shake-y:3px;--engine-shake-tilt:.6deg;--engine-fail-drop:12px;--engine-reveal-scale:1.12;display:flex;flex-direction:column;align-items:center;height:auto;isolation:isolate}
 .studio-heading{position:relative;z-index:2;text-align:center;pointer-events:none}
 .studio-heading p{color:#b7aaa0;font-size:10px;letter-spacing:.35em;margin:0 0 12px;text-transform:uppercase}
 .hero .studio-heading h1{color:#f7efe2;font:900 clamp(66px,8.6vw,136px)/.9 'Barlow Condensed',Impact,sans-serif;letter-spacing:-.025em;margin:0;max-width:none;text-transform:uppercase}
@@ -18,7 +18,7 @@
 .state-fixed .engine-render-broken{opacity:0}
 .state-fixed .engine-render-fixed{opacity:1}
 .state-fixed .engine-visual{animation:studio-running-settle .9s ease-out both}
-.engine-scan{position:absolute;top:10%;left:8%;right:8%;height:16%;opacity:0;border-top:1px solid #e6b273a0;background:linear-gradient(#e6b27312,transparent);pointer-events:none}
+.engine-scan{position:absolute;top:10%;left:8%;right:8%;height:16%;opacity:0;border-top:2px solid #efc48c;background:linear-gradient(#e6b27330,transparent);pointer-events:none}
 .state-repairing .engine-scan{animation:studio-scan var(--repairing-duration) ease-in-out both}
 .engine-hotspots{transform:translate3d(calc(var(--pointer-x)*4px),calc(var(--pointer-y)*3px),0)}
 .engine-hotspot{position:absolute;padding:0;border:0;border-radius:12px;background:transparent;cursor:help;min-width:44px;min-height:44px;-webkit-tap-highlight-color:transparent}
@@ -64,18 +64,18 @@
 /* The state durations come from the same constants as the audio/story timers. */
 @keyframes studio-start-sequence{
   0%,15%,30%,45%,60%,75%,100%{translate:0 0;rotate:0deg}
-  5%,20%,35%,50%,65%{translate:-2px 1px;rotate:-.2deg}
-  10%,25%,40%,55%,70%{translate:2px -1px;rotate:.2deg}
-  82%{translate:-3px 1px;rotate:-.3deg}
-  87%{translate:2px 0;rotate:.2deg}
-  93%{translate:0 2px;rotate:0deg}
+  5%,20%,35%,50%,65%{translate:calc(-1 * var(--engine-shake-x)) var(--engine-shake-y);rotate:calc(-1 * var(--engine-shake-tilt))}
+  10%,25%,40%,55%,70%{translate:var(--engine-shake-x) calc(-1 * var(--engine-shake-y));rotate:var(--engine-shake-tilt)}
+  82%{translate:calc(-1.2 * var(--engine-shake-x)) var(--engine-shake-y);rotate:calc(-1.2 * var(--engine-shake-tilt))}
+  87%{translate:var(--engine-shake-x) 0;rotate:var(--engine-shake-tilt)}
+  93%{translate:0 calc(2 * var(--engine-shake-y));rotate:0deg}
 }
-@keyframes studio-failed-settle{0%{translate:0 0;rotate:0deg}25%{translate:0 5px;rotate:-.45deg}65%{translate:0 -1px;rotate:.1deg}100%{translate:0 0;rotate:0deg}}
-@keyframes studio-running-settle{0%{translate:0 0}15%{translate:0 -2px}30%{translate:0 1px}45%{translate:0 -1px}65%{translate:0 .5px}100%{translate:0 0}}
-@keyframes studio-disassemble-out{0%,15%{opacity:1;scale:1;translate:0 0}65%,100%{opacity:0;scale:.96;translate:0 8px}}
-@keyframes studio-assemble-in{0%,15%{opacity:0;scale:1.06;clip-path:inset(0 0 100% 0);translate:0 -10px}35%{opacity:1}90%,100%{opacity:1;scale:1;clip-path:inset(0);translate:0 0}}
+@keyframes studio-failed-settle{0%{translate:0 0;rotate:0deg}25%{translate:0 var(--engine-fail-drop);rotate:calc(-1.5 * var(--engine-shake-tilt))}65%{translate:0 -3px;rotate:.25deg}100%{translate:0 0;rotate:0deg}}
+@keyframes studio-running-settle{0%{translate:0 0}15%{translate:0 -8px}30%{translate:0 4px}45%{translate:0 -3px}65%{translate:0 1px}100%{translate:0 0}}
+@keyframes studio-disassemble-out{0%,15%{opacity:1;scale:1;translate:0 0}65%,100%{opacity:0;scale:.9;translate:0 20px}}
+@keyframes studio-assemble-in{0%,15%{opacity:0;scale:var(--engine-reveal-scale);clip-path:inset(0 0 100% 0);translate:0 -22px}35%{opacity:1}90%,100%{opacity:1;scale:1;clip-path:inset(0);translate:0 0}}
 @keyframes studio-scan{0%,100%{opacity:0;translate:0 0}18%{opacity:1;translate:0 0}82%{opacity:1;translate:0 450%}95%{opacity:0;translate:0 450%}}
-@keyframes studio-copy-in{from{opacity:0;translate:0 9px}to{opacity:1;translate:0 0}}
+@keyframes studio-copy-in{from{opacity:0;translate:0 16px}to{opacity:1;translate:0 0}}
 @keyframes studio-label-in{from{opacity:.2;translate:0 4px}to{opacity:1;translate:0 0}}
 @keyframes studio-ready-in{from{opacity:0;scale:.65;rotate:-15deg}to{opacity:1;scale:1;rotate:0deg}}
 @keyframes studio-working-spin{to{rotate:360deg}}
@@ -83,6 +83,7 @@
 @keyframes studio-calling{0%,100%{box-shadow:0 0 30px #e6b27315}50%{box-shadow:0 0 0 7px #e6b27318,0 0 35px #e6b27330}}
 @media(max-width:980px){.hero{min-height:0}.hero-interaction{height:auto}.engine-art{width:min(100%,800px);min-width:0}}
 @media(max-width:650px){
+  .engine-experience{--engine-shake-x:10px;--engine-shake-y:4px;--engine-shake-tilt:1deg;--engine-fail-drop:18px;--engine-reveal-scale:1.16}
   .hero{padding:112px 20px 36px}
   .studio-heading p{font-size:8px;letter-spacing:.28em;margin-bottom:10px}
   .hero .studio-heading h1{font-size:clamp(58px,15vw,92px)}
