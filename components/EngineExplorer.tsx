@@ -14,7 +14,7 @@ const soundFiles: Record<SoundKey, string> = {
   dial: "/audio/marcado-telefonico.mp3",
   failed: "/audio/arranque-fallido.mp3",
   repair: "/audio/reparacion.mp3",
-  correct: "/audio/arranque-correcto.mp3",
+  correct: "/audio/motor-reparado-cierre.mp3",
 };
 
 const startingDuration = 3200;
@@ -48,6 +48,7 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
   const [selectedPart, setSelectedPart] = useState<PartId | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [reducedMotion, setReducedMotion] = useState(false);
+  // Every visit tries animations by default, subject to the device preference.
   const [motionMode, setMotionMode] = useState<MotionMode>("auto");
   const motionEnabled = motionMode === "full" || (motionMode === "auto" && !reducedMotion);
 
@@ -55,8 +56,6 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
     const audioElements = audioElementsRef.current;
     const storedSound = window.localStorage.getItem("el-respaldo-sound");
     if (storedSound !== null) setSoundEnabled(storedSound === "on");
-    const storedMotion = window.localStorage.getItem("el-respaldo-motion");
-    if (storedMotion === "full" || storedMotion === "reduced") setMotionMode(storedMotion);
     Object.entries(soundFiles).forEach(([key, source]) => {
       const soundKey = key as SoundKey;
       const audio = new Audio(source);
@@ -289,7 +288,7 @@ export default function EngineExplorer({ whatsappUrl }: { whatsappUrl: string })
     </div>
     <div className="engine-copy" aria-live="polite"><div className="engine-story-frame" key={engineState}><p className="engine-eyebrow"><span />{story.eyebrow}</p><h2>{story.title}</h2><p className="engine-subcopy">{story.subcopy}</p><span className="engine-state-label">{story.label}</span></div></div>
     <p className="engine-live" role="status">{liveMessage}</p>
-    <div className="engine-actions"><button type="button" className="primary-cta engine-action" disabled={engineState === "starting" || isCalling || engineState === "repairing"} onClick={handleAction}><span className="cta-icon" aria-hidden="true">{engineState === "fixed" ? "▣" : engineState === "starting" || isCalling || engineState === "repairing" ? "◌" : "⌁"}</span><span className="engine-action-label" key={actionLabel}>{actionLabel}</span><span className="arrow" aria-hidden="true">↗</span></button><div className="engine-tools"><button type="button" className="sound-toggle" aria-label={soundEnabled ? "Silenciar sonido" : "Activar sonido"} aria-pressed={soundEnabled} onClick={() => { const nextValue = !soundEnabled; setSoundEnabled(nextValue); window.localStorage.setItem("el-respaldo-sound", nextValue ? "on" : "off"); if (!nextValue) stopSounds(); }}>{soundEnabled ? "SONIDO ON" : "SONIDO OFF"}</button><button type="button" className="motion-toggle" aria-label={motionEnabled ? "Reducir animaciones" : "Activar animaciones"} aria-pressed={motionEnabled} onClick={() => { const nextMode = motionEnabled ? "reduced" : "full"; setMotionMode(nextMode); window.localStorage.setItem("el-respaldo-motion", nextMode); }}>{motionEnabled ? "ANIMACIONES ON" : "ANIMACIONES OFF"}</button>{engineState === "fixed" && <button type="button" className="reset-button" onClick={resetEngine}>Repetir historia</button>}</div></div>
+    <div className="engine-actions"><button type="button" className="primary-cta engine-action" disabled={engineState === "starting" || isCalling || engineState === "repairing"} onClick={handleAction}><span className="cta-icon" aria-hidden="true">{engineState === "fixed" ? "▣" : engineState === "starting" || isCalling || engineState === "repairing" ? "◌" : "⌁"}</span><span className="engine-action-label" key={actionLabel}>{actionLabel}</span><span className="arrow" aria-hidden="true">↗</span></button><div className="engine-tools"><button type="button" className="sound-toggle" aria-label={soundEnabled ? "Silenciar sonido" : "Activar sonido"} aria-pressed={soundEnabled} onClick={() => { const nextValue = !soundEnabled; setSoundEnabled(nextValue); window.localStorage.setItem("el-respaldo-sound", nextValue ? "on" : "off"); if (!nextValue) stopSounds(); }}>{soundEnabled ? "SONIDO ON" : "SONIDO OFF"}</button><button type="button" className="motion-toggle" aria-label={motionEnabled ? "Reducir animaciones" : "Activar animaciones"} aria-pressed={motionEnabled} onClick={() => { const nextMode = motionEnabled ? "reduced" : "full"; setMotionMode(nextMode); }}>{motionEnabled ? "ANIMACIONES ON" : "ANIMACIONES OFF"}</button>{engineState === "fixed" && <button type="button" className="reset-button" onClick={resetEngine}>Repetir historia</button>}</div></div>
     <p className="engine-hint">{story.hint}</p>
   </div>;
 }
